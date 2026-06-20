@@ -15,7 +15,7 @@
 import { fmtRate, fmtTokens, fmtMs, fmtCost, sparkline } from "./format.js";
 
 const DEFAULTS = {
-  icon: "⚡",
+  icon: "",
   label: "TPS",
   unit: "tok/s",
   detail: "full", // "full" | "compact" | "minimal"
@@ -46,8 +46,9 @@ export function buildView(input = {}) {
   // "Streaming" = the model is producing tokens *right now*. The session status
   // is authoritative (it flips to "idle" the moment a turn completes), so trust
   // it when present; the meter's trailing window is only a fallback for runtimes
-  // that don't surface status. This avoids a completed message lingering as
-  // "●live" while its 3s rate window drains.
+  // that don't surface status. This keeps a completed message from showing a
+  // stale live rate while its 3s rate window drains (the headline snaps to the
+  // exact figure instead).
   const streaming =
     status === "busy" ? true : status === "idle" || status === "retry" ? false : !!(live && live.active);
   const hasHistory = !!last || (session && session.count > 0);
@@ -67,12 +68,12 @@ export function buildView(input = {}) {
   const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null) });
 
   // ── Header + headline number ──────────────────────────────────────────────
-  const headerSegs = [{ text: `${cfg.icon} ${cfg.label}`, tone: "header" }];
+  const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
+  const headerSegs = [{ text: headerLabel, tone: "header" }];
   if (headline !== null && headline !== undefined) {
     headerSegs.push({ text: "  ", tone: "muted" });
     headerSegs.push({ text: fmtRate(headline), tone: streaming ? "accent" : "value" });
     headerSegs.push({ text: ` ${cfg.unit}`, tone: "muted" });
-    headerSegs.push({ text: streaming ? "  ●live" : "  last", tone: streaming ? "good" : "muted" });
   }
   push("header", headerSegs);
 

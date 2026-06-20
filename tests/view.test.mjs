@@ -28,7 +28,7 @@ test("idle-with-history projects exact, provider-reported lines", () => {
   assert.equal(
     renderText(v),
     [
-      "⚡ TPS  150 tok/s  last",
+      "TPS  150 tok/s",
       "last 150 tok/s  ttft 420ms · 312 tok · 2.1s",
       "avg  150 tok/s  peak 150",
       "Σ    312 tok · 1 msg · $0.012",
@@ -50,7 +50,7 @@ test("streaming projects the live headline, sparkline, and running totals", () =
   const v = buildView({ live, last: null, session: null, status: "busy" });
   assert.equal(v.state, "live");
   const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
-  assert.equal(lines[0], "⚡ TPS  120 tok/s  ●live");
+  assert.equal(lines[0], "TPS  120 tok/s"); // no emoji, no live/last badge
   assert.equal(lines[1].length, 24); // sparkline rendered at default width
   assert.ok(lines[1].endsWith("█")); // peak value tops out
   assert.equal(lines[2], "now  240 tok · peak 130");
@@ -85,18 +85,21 @@ test("session status is authoritative over the meter's trailing window", () => {
   const v = buildView({ live: drainingButDone, last, session: aggregate([last]), status: "idle" });
   assert.equal(v.state, "idle");
   const header = v.lines[0].segments.map((s) => s.text).join("");
-  assert.ok(header.includes("last"));
-  assert.ok(!header.includes("live"));
   // headline number is the exact last (150), not the draining live (77)
   assert.ok(header.includes("150"));
   assert.ok(!header.includes("77"));
+  // the exact-last detail row is still present
+  const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
+  assert.ok(lines.some((l) => l.startsWith("last 150 tok/s")));
 });
 
 test("busy status forces live even if the meter just started (no window yet)", () => {
   const justStarted = { rate: 40, smooth: 40, peak: 40, total: 12, count: 2, active: false, series: [40], elapsedSec: 0.1 };
   const v = buildView({ live: justStarted, last: null, session: null, status: "busy" });
   assert.equal(v.state, "live");
-  assert.ok(v.lines[0].segments.map((s) => s.text).join("").includes("●live"));
+  // headline is the live rate, toned 'accent' (the only live/idle cue now that the badge is gone)
+  const headline = v.lines[0].segments.find((s) => s.text === "40");
+  assert.ok(headline && headline.tone === "accent");
 });
 
 test("minimal detail emits only header (+ sparkline)", () => {

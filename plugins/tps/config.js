@@ -23,7 +23,7 @@ export const DEFAULTS = {
   seriesLength: 40, // sparkline history length
   metric: "output", // "output" | "generated"
   detail: "full", // "full" | "compact" | "minimal"
-  icon: "⚡",
+  icon: "", // optional prefix glyph; empty = none (clean/professional default)
   label: "TPS",
   unit: "tok/s",
   sparkWidth: 24,

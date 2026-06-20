@@ -101,7 +101,8 @@ for character, with no terminal involved (`renderText()` flattens a view to plai
 
 Key rule encoded here: `status` is authoritative for "is streaming" (`busy` ⇒ live, `idle`/
 `retry` ⇒ not), with the meter's trailing window only a fallback. So a completed message
-switches cleanly from the live estimate to the exact figure instead of lingering as `●live`.
+switches cleanly from the live estimate to the exact figure instead of showing a stale live
+reading while its rate window drains.
 
 ## The TUI adapter — `tps-meter.tsx`
 

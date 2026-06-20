@@ -1,4 +1,4 @@
-# ⚡ opencode-tps-meter
+# opencode-tps-meter
 
 A **precise tokens-per-second (TPS) meter** for the [OpenCode](https://opencode.ai) TUI sidebar.
 It shows how fast the model is actually generating — live while it streams, then the exact
@@ -11,12 +11,12 @@ native sidebar sections.
 ![node >= 20.11](https://img.shields.io/badge/node-%3E%3D20.11-3c873a.svg)
 
 ```text
-⚡ TPS  241 tok/s  ●live          ⚡ TPS  237 tok/s  last
+TPS  241 tok/s                   TPS  237 tok/s
 ▁▁▁▁▁▁▂▆▇████████████████   →    ██████████████▇▇▇▆▆▆▅▅▄▄▄
-now  622 tok · peak 248           last 237 tok/s  ttft 650ms · 1.1k tok · 4.6s
-                                  avg  237 tok/s  peak 237
-   while streaming                Σ    1.1k tok · 1 msg · $0.0099
-                                     after the turn completes
+now  622 tok · peak 248          last 237 tok/s  ttft 650ms · 1.1k tok · 4.6s
+                                 avg  237 tok/s  peak 237
+   while streaming               Σ    1.1k tok · 1 msg · $0.0099
+                                    after the turn completes
 ```
 
 > Try it right now without OpenCode: `node tools/demo.mjs` (animated) or `node tools/demo.mjs --ci`.
@@ -44,18 +44,18 @@ estimate. The *live* number is a calibrated estimate while streaming — see
 
 ## Features
 
-- 🟢 **Live windowed TPS + sparkline** that animates while the model streams and decays to zero
+- **Live windowed TPS + sparkline** that animates while the model streams and decays to zero
   when it stops.
-- 🎯 **Exact, provider-reported throughput** for the last message (output and, optionally,
+- **Exact, provider-reported throughput** for the last message (output and, optionally,
   output+reasoning), with **measured time-to-first-token** and decode duration.
-- 📊 **Session aggregates** — pooled average TPS, peak, total tokens, message count, and cost.
-- 🧮 **Self-calibrating** characters→token ratio, learned per model from each completed
-  message's exact token count, so the live estimate tracks the real tokenizer over time.
-- 🧩 **Additive** — renders into the stacking `sidebar_content` slot, so your Context / MCP /
-  LSP / Todo / Files sections stay exactly where they are.
-- 🎨 **Theme-aware** colors, with full per-tone overrides.
-- 🛡️ **Crash-proof** — any API drift renders nothing rather than taking down the TUI.
-- ✅ **Measured** — 51 unit tests over a pure, framework-free core; numbers verified against
+- **Session aggregates** — pooled average TPS, peak, total tokens, message count, and cost.
+- **Self-calibrating** characters→token ratio, learned per model from each completed message's
+  exact token count, so the live estimate tracks the real tokenizer over time.
+- **Additive** — renders into the stacking `sidebar_content` slot, so your Context / MCP / LSP /
+  Todo / Files sections stay exactly where they are.
+- **Theme-aware** colors, with full per-tone overrides.
+- **Crash-proof** — any API drift renders nothing rather than taking down the TUI.
+- **Measured** — 51 unit tests over a pure, framework-free core; numbers verified against
   hand-computed expectations.
 
 ## Install
@@ -75,7 +75,7 @@ cd opencode-tps-meter
 node scripts/install.mjs --local     # links THIS checkout via a file: dependency
 ```
 
-Then **restart the OpenCode TUI** — a `⚡ TPS` section appears in the sidebar.
+Then **restart the OpenCode TUI** — a `TPS` section appears in the sidebar.
 
 Installer flags: `--local`, `--dir <path>`, `--no-install`, `--dry-run`, `--uninstall`, `--print`.
 
@@ -122,7 +122,7 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `showSession` | `true` | Show the session aggregate lines. |
 | `showCost` | `true` | Include cost in the totals line. |
 | `showCache` | `false` | Include cache-read tokens in the totals line. |
-| `icon` / `label` / `unit` | `"⚡"` / `"TPS"` / `"tok/s"` | Header text. |
+| `icon` / `label` / `unit` | `""` / `"TPS"` / `"tok/s"` | Header text (empty `icon` = no glyph; set e.g. `"⚡"` to add one). |
 | `colors` | theme | `{ tone: "#hex" }` overrides for tones `header｜accent｜value｜good｜warn｜muted｜label`. |
 
 Environment overrides (handy for quick toggles):
@@ -151,8 +151,9 @@ a running token count mid-stream). The plugin makes it as accurate as possible:
    span so the first couple of chunks can't report an absurd spike.
 
 The moment the turn completes, the headline switches from the calibrated live estimate to the
-**exact** provider figure. The session **status** is authoritative for "is it streaming" — a
-finished message never lingers as `●live`.
+**exact** provider figure. The session **status** is authoritative for whether a turn is still
+streaming, so a finished message snaps to its exact figure immediately (no stale "live" reading
+while the rate window drains).
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full methodology and module map.
 

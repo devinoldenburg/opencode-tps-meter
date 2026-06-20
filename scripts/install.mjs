@@ -176,7 +176,7 @@ function main() {
   }
 
   console.log("");
-  console.log(C.green(`Done.`) + ` Restart the OpenCode TUI — the ${C.cyan("⚡ TPS")} section appears in the sidebar.`);
+  console.log(C.green(`Done.`) + ` Restart the OpenCode TUI — the ${C.cyan("TPS")} section appears in the sidebar.`);
 }
 
 /** Pick an npm version spec: the local package's version as a caret range, else "latest". */
