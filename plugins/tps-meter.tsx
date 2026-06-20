@@ -104,6 +104,9 @@ function TpsView(props) {
               const parts = props.api.state.part(info.id) || [];
               for (const p of parts) {
                 if ((p.type === "text" || p.type === "reasoning") && typeof p.text === "string") chars += p.text.length;
+                // The part is finalized — drop its live delta-tracking entry so
+                // partLen only ever holds the handful of currently-streaming parts.
+                partLen.delete(p.id);
               }
             } catch {
               /* parts unavailable on this build — skip calibration this round */
@@ -115,10 +118,32 @@ function TpsView(props) {
         }
         bump();
       };
+      // Cleanup handlers so the per-session maps don't accumulate orphans. We must
+      // keep firstTokenAt for every *live* message (the view recomputes exact
+      // decode-window stats for all of them), so we only drop an entry when its
+      // message is actually removed from the session.
+      const onMessageRemoved = (event) => {
+        try {
+          const messageID = event?.properties?.messageID;
+          if (messageID) firstTokenAt.delete(messageID);
+        } catch {
+          /* ignore */
+        }
+        bump();
+      };
+      const onPartRemoved = (event) => {
+        try {
+          const partID = event?.properties?.partID;
+          if (partID) partLen.delete(partID);
+        } catch {
+          /* ignore */
+        }
+      };
       const subs = [
         ["message.part.updated", onPart],
+        ["message.part.removed", onPartRemoved],
         ["message.updated", onMessage],
-        ["message.removed", onMessage],
+        ["message.removed", onMessageRemoved],
         ["session.status", onMessage],
         ["session.idle", onMessage],
       ];
