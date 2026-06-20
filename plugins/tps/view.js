@@ -43,7 +43,13 @@ export function buildView(input = {}) {
   const session = input.session || null;
   const status = input.status;
 
-  const streaming = !!(live && live.active) || status === "busy";
+  // "Streaming" = the model is producing tokens *right now*. The session status
+  // is authoritative (it flips to "idle" the moment a turn completes), so trust
+  // it when present; the meter's trailing window is only a fallback for runtimes
+  // that don't surface status. This avoids a completed message lingering as
+  // "●live" while its 3s rate window drains.
+  const streaming =
+    status === "busy" ? true : status === "idle" || status === "retry" ? false : !!(live && live.active);
   const hasHistory = !!last || (session && session.count > 0);
 
   if (!streaming && !hasHistory) {

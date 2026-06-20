@@ -68,6 +68,37 @@ test("live headline segment is toned 'accent', idle is 'value'", () => {
   assert.equal(idleTone, "value");
 });
 
+test("session status is authoritative over the meter's trailing window", () => {
+  // A completed message whose 3s rate window has NOT yet drained: meter still
+  // reports active, but status==="idle" -> must render the exact 'last', not live.
+  const drainingButDone = {
+    rate: 77,
+    smooth: 77,
+    peak: 187,
+    total: 900,
+    count: 200,
+    active: true, // window not drained
+    series: [180, 150, 120, 90, 60],
+    elapsedSec: 5,
+  };
+  const last = messageStats(LAST_MSG, 1420);
+  const v = buildView({ live: drainingButDone, last, session: aggregate([last]), status: "idle" });
+  assert.equal(v.state, "idle");
+  const header = v.lines[0].segments.map((s) => s.text).join("");
+  assert.ok(header.includes("last"));
+  assert.ok(!header.includes("live"));
+  // headline number is the exact last (150), not the draining live (77)
+  assert.ok(header.includes("150"));
+  assert.ok(!header.includes("77"));
+});
+
+test("busy status forces live even if the meter just started (no window yet)", () => {
+  const justStarted = { rate: 40, smooth: 40, peak: 40, total: 12, count: 2, active: false, series: [40], elapsedSec: 0.1 };
+  const v = buildView({ live: justStarted, last: null, session: null, status: "busy" });
+  assert.equal(v.state, "live");
+  assert.ok(v.lines[0].segments.map((s) => s.text).join("").includes("●live"));
+});
+
 test("minimal detail emits only header (+ sparkline)", () => {
   const last = messageStats(LAST_MSG, 1420);
   const v = buildView({ last, session: aggregate([last]), status: "idle", config: { detail: "minimal" } });
