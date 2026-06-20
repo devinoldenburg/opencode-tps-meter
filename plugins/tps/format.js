@@ -16,6 +16,7 @@ export const SPARK_CHARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "�
  * `null`/non-finite → the placeholder (default "–").
  */
 export function fmtRate(value, placeholder = "–") {
+  if (value === null || value === undefined) return placeholder; // unknown, not zero
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return placeholder;
   if (n >= 1000) return trimZero((n / 1000).toFixed(1)) + "k";
