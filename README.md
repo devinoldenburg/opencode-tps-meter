@@ -1,9 +1,10 @@
 # opencode-tps-meter
 
 A **precise tokens-per-second (TPS) meter** for the [OpenCode](https://opencode.ai) TUI sidebar.
-It shows how fast the model is actually generating — live while it streams, then the exact
-provider-reported throughput once the turn completes — without replacing any of OpenCode's
-native sidebar sections.
+It measures **only active token generation** — how fast the model actually emits tokens — and is
+blind to everything OpenCode waits for inside a turn (tool calls, permission prompts, provider
+stalls). It shows nothing OpenCode's native sidebar already shows (no token totals, no cost) and
+replaces none of its sections.
 
 [![CI](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml/badge.svg)](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -11,12 +12,13 @@ native sidebar sections.
 ![node >= 20.11](https://img.shields.io/badge/node-%3E%3D20.11-3c873a.svg)
 
 ```text
-TPS  241 tok/s                   TPS  237 tok/s
-▁▁▁▁▁▁▂▆▇████████████████   →    ██████████████▇▇▇▆▆▆▅▅▄▄▄
-now  622 tok · peak 248          last 237 tok/s  ttft 650ms · 1.1k tok · 4.6s
-                                 avg  237 tok/s  peak 237
-   while streaming               Σ    1.1k tok · 1 msg · $0.0099
-                                    after the turn completes
+streaming, mid tool call           after the turn completes
+TPS  192 tok/s                     TPS  192 tok/s
+██▇▇▆▆▅▅▄▄▃▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁   →   last 192 tok/s  ttft 618ms · −3.8s wait
+now  peak 198 tok/s · −3.8s wait    avg  192 tok/s  peak 192
+
+the headline TPS holds steady across the tool call; the sparkline dips because
+no tokens are flowing — and the 3.8s the tool took is excluded, not counted.
 ```
 
 > Try it right now without OpenCode: `node tools/demo.mjs` (animated) or `node tools/demo.mjs --ci`.
@@ -25,38 +27,40 @@ now  622 tok · peak 248          last 237 tok/s  ttft 650ms · 1.1k tok · 4.6s
 
 ## Why another meter?
 
-OpenCode's sidebar already shows token **totals** and context usage. This plugin answers a
-different question — **how fast?** — and answers it precisely, distinguishing the things that
-are usually conflated:
+OpenCode's native Context section already shows token **totals**, **% context**, and **cost**.
+This plugin deliberately shows none of those — it answers a different question, **how fast?**,
+and answers it precisely, distinguishing things that are usually conflated:
 
 | Measurement | What it means | How it's measured |
 |---|---|---|
-| **Live TPS** | Throughput *right now*, while streaming | Trailing-window rate over streamed deltas, each timestamped on arrival |
-| **TTFT** | Time-to-first-token (prefill / queue latency) | Wall-clock from request start to the first streamed chunk |
-| **Decode TPS** | The model's raw emit speed, *excluding* prefill | `output ÷ (completed − first-token)` |
-| **End-to-end TPS** | What you actually feel for the whole turn | `output ÷ (completed − created)` |
-| **Session avg** | Combined speed across the session | **Pooled** (Σtokens ÷ Σtime), not a naive mean of rates |
+| **Generation TPS** | How fast the model emits tokens, excluding every wait | tokens ÷ **active-generation time** — the summed gaps *between* streamed tokens, minus any gap big enough to be a tool call / wait |
+| **TTFT** | Time-to-first-token (prefill / queue latency) | wall-clock from request start to the first streamed token |
+| **Excluded wait** | Time the turn spent on tools / waiting (not generation) | summed gaps at/above the threshold — surfaced as `−Ns wait`, never in the rate |
+| **End-to-end TPS** | What you'd naively measure (and why it's misleading) | `output ÷ (completed − created)` — includes all the waits |
+| **Session avg** | Combined speed across the session | **pooled** (Σtokens ÷ Σactive-time), not a naive mean of rates |
 
-Every headline number is **exact** the moment a message completes: it uses the provider's own
-token counts (`tokens.output` / `tokens.reasoning`) and OpenCode's server timestamps, not an
-estimate. The *live* number is a calibrated estimate while streaming — see
-[Precision](#how-precise-is-it) below.
+The key idea: a turn's wall-clock includes tool execution and waits, so `tokens ÷ wall-clock`
+*understates* generation speed — often by 3–4×. This meter times the **stream itself**, so a
+4-second tool call in the middle of a turn is invisible to the TPS. See
+[Precision](#how-precise-is-it) for the exact method.
 
 ## Features
 
-- **Live windowed TPS + sparkline** that animates while the model streams and decays to zero
-  when it stops.
-- **Exact, provider-reported throughput** for the last message (output and, optionally,
-  output+reasoning), with **measured time-to-first-token** and decode duration.
-- **Session aggregates** — pooled average TPS, peak, total tokens, message count, and cost.
+- **Pure generation TPS** — measures active token-emission time only; tool calls, permission
+  waits, and stalls are excluded (and surfaced separately as `−Ns wait`).
+- **Live + exact, consistent** — the live headline is the in-flight message's active-generation
+  rate; when the turn completes it locks to the provider's exact token count over the same
+  measured time, so the number doesn't jump.
+- **Measured TTFT** and a sparkline that dips during a tool call while the headline holds steady.
+- **No native duplication** — token totals and cost (shown by OpenCode's Context section) are off
+  by default; you see throughput, not numbers you already have.
 - **Self-calibrating** characters→token ratio, learned per model from each completed message's
-  exact token count, so the live estimate tracks the real tokenizer over time.
+  exact token count, so the live estimate tracks the real tokenizer.
 - **Additive** — renders into the stacking `sidebar_content` slot, so your Context / MCP / LSP /
   Todo / Files sections stay exactly where they are.
-- **Theme-aware** colors, with full per-tone overrides.
-- **Crash-proof** — any API drift renders nothing rather than taking down the TUI.
-- **Measured** — 51 unit tests over a pure, framework-free core; numbers verified against
-  hand-computed expectations.
+- **Theme-aware** colors with per-tone overrides; **crash-proof** (any API drift renders nothing).
+- **Measured** — 62 unit + integration tests over a pure, framework-free core, including a
+  server-stream simulation that proves the tool wait is excluded to the token.
 
 ## Install
 
@@ -103,7 +107,7 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 {
   "$schema": "https://opencode.ai/tui.json",
   "plugin": [
-    ["opencode-tps-meter", { "metric": "generated", "windowMs": 2000, "detail": "compact" }]
+    ["opencode-tps-meter", { "metric": "output", "gapMs": 1000, "detail": "compact" }]
   ]
 }
 ```
@@ -113,54 +117,67 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `enabled` | `true` | Set `false` to disable without uninstalling. |
 | `order` | `150` | Position among sidebar sections (Context=100, MCP=200, LSP=300, Todo=400, Files=500). |
 | `slot` | `"sidebar_content"` | Sidebar slot to render into (stacking — additive). |
-| `metric` | `"output"` | Headline metric: `"output"` or `"generated"` (output + reasoning). |
+| `metric` | `"generated"` | Headline metric: `"generated"` (output + reasoning) or `"output"`. |
+| `gapMs` | `1500` | Inter-token gap at/above which generation is treated as paused (tool/wait) and **excluded** from TPS. |
 | `detail` | `"full"` | `"full"`, `"compact"`, or `"minimal"` (header + sparkline only). |
-| `windowMs` | `3000` | Trailing window for the live rate. |
+| `windowMs` | `3000` | Trailing window for the live **sparkline** rate (the headline uses active-gen time, not this). |
 | `pollMs` | `250` | Live re-sample cadence (sparkline animation + decay). |
 | `sparkWidth` | `24` | Sparkline width in cells. |
 | `seriesLength` | `40` | Sparkline history length. |
-| `showSession` | `true` | Show the session aggregate lines. |
-| `showCost` | `true` | Include cost in the totals line. |
-| `showCache` | `false` | Include cache-read tokens in the totals line. |
+| `showWaits` | `true` | Surface excluded tool/wait time as `−Ns wait`. |
+| `showSession` | `true` | Show the session average + peak line. |
+| `showTotals` | `false` | Add a `Σ tokens · msgs` line. **Off** — OpenCode's Context section already shows tokens. |
+| `showCost` | `false` | Add cost to the totals line. **Off** — native Context already shows cost. |
+| `showCache` | `false` | Add cache-read tokens to the totals line. |
 | `icon` / `label` / `unit` | `""` / `"TPS"` / `"tok/s"` | Header text (empty `icon` = no glyph; set e.g. `"⚡"` to add one). |
 | `colors` | theme | `{ tone: "#hex" }` overrides for tones `header｜accent｜value｜good｜warn｜muted｜label`. |
 
 Environment overrides (handy for quick toggles):
-`OPENCODE_TPS_METER_DISABLE=1`, `OPENCODE_TPS_METER_METRIC=generated`,
-`OPENCODE_TPS_METER_DETAIL=compact`, `OPENCODE_TPS_METER_WINDOW_MS=2000`,
-`OPENCODE_TPS_METER_SLOT=sidebar_content`.
+`OPENCODE_TPS_METER_DISABLE=1`, `OPENCODE_TPS_METER_METRIC=output`,
+`OPENCODE_TPS_METER_DETAIL=compact`, `OPENCODE_TPS_METER_GAP_MS=1000`,
+`OPENCODE_TPS_METER_WINDOW_MS=2000`, `OPENCODE_TPS_METER_SLOT=sidebar_content`.
 
 ## How precise is it?
 
-**Exact numbers** (the `last`, `avg`, `peak`, totals, and cost) come straight from OpenCode's
-`AssistantMessage`: the provider's `tokens.{input,output,reasoning,cache}` and the server's
-`time.{created,completed}`. No estimation is involved — these are ground truth.
+TPS here means **tokens ÷ active-generation time** — the time the model spent actually emitting
+tokens, and nothing else.
 
-**The live number** is necessarily an estimate while a message streams (providers don't report
-a running token count mid-stream). The plugin makes it as accurate as possible:
+**Why not wall-clock?** A turn's `completed − created` (and even `completed − firstToken`)
+includes everything OpenCode waits for *inside* the turn: tool execution, permission prompts,
+provider stalls, and the re-prefill before the model resumes after a tool. Dividing tokens by
+that understates generation speed, often by 3–4×. So we don't time the turn — we time the
+**stream**.
 
-1. Every `message.part.updated` event carries a streamed `delta`. We timestamp each chunk on
-   arrival and convert its characters to tokens.
-2. The characters→token ratio is **calibrated per model**: when a message completes, we know
-   the exact token count *and* the exact characters streamed, so we update the ratio (EWMA,
-   clamped to a sane range). The next message's live estimate uses the learned ratio.
-3. The first chunk's arrival time gives a real **time-to-first-token**, so decode-rate excludes
-   prefill latency.
-4. Throughput is a **trailing-window** average (default 3s): unbiased once warm, responsive at
-   the start, and it decays smoothly to zero when the stream stops — with a floor on the window
-   span so the first couple of chunks can't report an absurd spike.
+1. Every `message.part.updated` event carries a streamed `delta`. Each chunk is timestamped on
+   arrival. **Active-generation time** is the sum of the gaps *between* consecutive chunks — but
+   only gaps below `gapMs` (default 1500 ms). A larger gap means the model stopped emitting (a
+   tool call / wait), so it is **excluded** and reported separately as `−Ns wait`. Active
+   generation gaps are tiny (models emit many tokens/sec); tool calls are seconds — the threshold
+   sits comfortably between, so real generation is never excluded and waits always are.
+2. The first chunk of each burst (the start, and the first chunk after each excluded gap) was
+   decoded during prefill/resume — *before* the window we time — so its "prime" tokens are
+   excluded from the numerator. With that, a constant-rate stream measures its true rate **to the
+   token**, no matter how many tool calls interrupt it.
+3. The first chunk's arrival gives a real **time-to-first-token**.
+4. The characters→token ratio is **calibrated per model** from each completed message's exact
+   token count, so the live estimate tracks the real tokenizer.
+5. When the turn completes, the headline locks to the provider's **exact** token count over the
+   same measured active time (prime-corrected identically), so the number doesn't jump. Session
+   **status** is authoritative for "is it still streaming", so a finished turn snaps to its exact
+   figure immediately.
 
-The moment the turn completes, the headline switches from the calibrated live estimate to the
-**exact** provider figure. The session **status** is authoritative for whether a turn is still
-streaming, so a finished message snaps to its exact figure immediately (no stale "live" reading
-while the rate window drains).
+This is verified by a **server-stream simulation** (`tests/gen.test.mjs`,
+`tests/integration.test.mjs`): a 200 tok/s stream interrupted by two 5-second tool calls is
+measured as exactly 200 tok/s, while a naive wall-clock reading would show ~46. Run
+`node tools/demo.mjs` to watch the headline hold steady across a tool call while the sparkline
+dips.
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full methodology and module map.
 
 ## Development
 
 ```bash
-npm test                 # 51 unit tests over the pure core (node --test)
+npm test                 # 62 unit + integration tests over the pure core (node --test)
 npm run test:coverage    # with coverage
 node tools/demo.mjs       # animated terminal demo (no OpenCode needed)
 node tools/demo.mjs --ci  # deterministic frames, doubles as a smoke test

@@ -12,25 +12,32 @@ Initial release.
 
 ### Added
 
-- **Live TPS meter** for the OpenCode TUI sidebar: a trailing-window tokens-per-second headline
-  and an animated sparkline that decays to zero when streaming stops.
-- **Exact, provider-reported throughput** for the last completed message — output and
-  output+reasoning rates, with **measured time-to-first-token** and decode duration (decode vs
-  end-to-end windows).
-- **Session aggregates** — pooled average TPS, peak, total tokens, message count, and cost.
+- **Pure generation TPS** — measures `tokens ÷ active-generation time`, where active time is the
+  summed gaps *between* streamed tokens minus any gap large enough to be a tool call / wait
+  (`gapMs`, default 1500 ms). Tool execution, permission prompts, and provider stalls are
+  excluded from the rate and surfaced separately as `−Ns wait`. Prefill/resume "prime" tokens are
+  excluded from the numerator, so a constant-rate stream measures its true rate to the token —
+  proven by a server-stream simulation.
+- **Consistent live + exact** — the live headline is the in-flight message's active-generation
+  rate; on completion it locks to the provider's exact `tokens.{output,reasoning}` over the same
+  measured time, so the number doesn't jump.
+- **Measured time-to-first-token**, a sparkline (windowed `RateMeter`) that dips during a tool
+  call while the headline holds steady, and pooled session average + peak.
+- **No native duplication** — token totals and cost (shown by OpenCode's Context section) are off
+  by default (`showTotals` / `showCost`); the meter shows throughput, TTFT, and excluded wait.
 - **Self-calibrating characters→token ratio**, learned per model from each completed message's
-  exact token count, so the live estimate tracks the real tokenizer.
+  exact token count.
 - **Additive rendering** into the stacking `sidebar_content` slot (order 150) — never replaces
   native sidebar sections.
-- **Theme-aware colors** with per-tone overrides; configurable metric, detail level, window,
-  cadence, sparkline width, and labels, via plugin options or environment variables.
+- **Theme-aware colors** with per-tone overrides; configurable metric (default `generated`),
+  gap threshold, detail level, sparkline, and labels, via plugin options or environment variables.
 - **Installer** (`scripts/install.mjs`, the package bin) — idempotent, reversible, with
   `--local` / `--dir` / `--dry-run` / `--uninstall` / `--print` modes.
-- **Pure, framework-free core** (`plugins/tps/*.js`) with **51 unit tests** asserting
-  hand-computed exact expectations.
-- **Tooling**: a runnable terminal demo (`tools/demo.mjs`, with a deterministic `--ci` mode)
-  and a Bun-based plugin verifier (`tools/verify-plugin.mjs`) that loads the real TSX under the
-  `@opentui/solid` runtime.
+- **Pure, framework-free core** (`plugins/tps/*.js`) with **62 unit + integration tests**
+  asserting hand-computed exact expectations.
+- **Tooling**: a runnable terminal demo (`tools/demo.mjs`, with a tool-call gap and a
+  deterministic `--ci` mode), a Bun-based plugin verifier (`tools/verify-plugin.mjs`), and a peer
+  installer (`tools/install-peers.mjs`).
 
 [Unreleased]: https://github.com/devinoldenburg/opencode-tps-meter/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.0
