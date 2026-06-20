@@ -2,11 +2,12 @@
 
 **Task:** Build a precise tokens-per-second (TPS) meter as an OpenCode TUI sidebar
 plugin. Same repo scheme as other OpenCode plugins (mirrors `opencode-goal-mode`).
-Create it locally and as a **private** GitHub repo, but make it fully public-ready
-(README, LICENSE, CHANGELOG, CI, tests, installer). Commit + push every small change.
+Created locally and as a **public** GitHub repo, fully public-ready (README, LICENSE,
+CHANGELOG, CI, tests, installer). Commit + push every small change.
 
-**Where it lives:** `/Users/devin/development/2026-06-20/opencode-tps-meter`
-GitHub: `github.com/devinoldenburg/opencode-tps-meter` (private for now).
+**Where it lives:** this repository.
+GitHub: `github.com/devinoldenburg/opencode-tps-meter` (public).
+npm: `@devinoldenburg/opencode-tps-meter`.
 
 ## How OpenCode TUI plugins work (verified against installed 1.17.x)
 

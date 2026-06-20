@@ -86,7 +86,7 @@ node scripts/install.mjs --local     # links THIS checkout via a file: dependenc
 
 Then **restart the OpenCode TUI** — a `TPS` section appears in the sidebar.
 
-Installer flags: `--local`, `--dir <path>`, `--no-install`, `--dry-run`, `--uninstall`, `--print`.
+Installer flags: `--local`, `--dir <path>`, `--no-install`, `--dry-run`, `--uninstall`, `--print`, `--help`.
 
 ### Manual
 
@@ -125,6 +125,7 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `metric` | `"generated"` | Headline metric: `"generated"` (output + reasoning) or `"output"`. |
 | `gapMs` | `1500` | Inter-token gap at/above which generation is treated as paused (tool/wait) and **excluded** from TPS. |
 | `detail` | `"full"` | `"full"`, `"compact"`, or `"minimal"` (header + sparkline only). |
+| `showSparkline` | `true` | Render the trailing-window sparkline line. Set `false` to show the headline + session line only. |
 | `windowMs` | `3000` | Trailing window for the live **sparkline** rate (the headline uses active-gen time, not this). |
 | `pollMs` | `250` | Live re-sample cadence (sparkline animation + decay). |
 | `sparkWidth` | `24` | Sparkline width in cells. |
@@ -138,7 +139,8 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `colors` | theme | `{ tone: "#hex" }` overrides for tones `header｜accent｜value｜good｜warn｜muted｜label`. |
 
 Environment overrides (handy for quick toggles):
-`OPENCODE_TPS_METER_DISABLE=1`, `OPENCODE_TPS_METER_METRIC=output`,
+`OPENCODE_TPS_METER=0` (disable), `OPENCODE_TPS_METER_DISABLE=1`,
+`OPENCODE_TPS_METER_METRIC=output`,
 `OPENCODE_TPS_METER_DETAIL=compact`, `OPENCODE_TPS_METER_GAP_MS=1000`,
 `OPENCODE_TPS_METER_WINDOW_MS=2000`, `OPENCODE_TPS_METER_SLOT=sidebar_content`.
 

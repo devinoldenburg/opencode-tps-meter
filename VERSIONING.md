@@ -12,7 +12,7 @@ Given a version `MAJOR.MINOR.PATCH`:
 - **PATCH** — backwards-compatible bug fixes and refinements (measurement precision fixes,
   theme tweaks, crash-proofing against API drift).
 
-Anything in the public `exports` surface (`./`, `./tui`, `./core`, `./package.json`) is covered
+Anything in the public `exports` surface (`.`, `./tui`, `./core`, `./package.json`) is covered
 by this policy. Internal modules (`plugins/tps/*.js` beyond the re-exports in `./core`,
 `tools/*`, `scripts/*`) are not part of the stability contract and may change at any time.
 

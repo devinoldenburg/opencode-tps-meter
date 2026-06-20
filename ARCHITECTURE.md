@@ -100,14 +100,6 @@ exact characters streamed, so `ratio ← EWMA(ratio, chars/tokens)` (clamped to 
 estimate is seeded at `4` (English-ish) and converges to the model's real tokenizer within a
 message or two.
 
-### Calibration — `tps.js#calibrateRatio`
-
-Live deltas are *characters*; throughput is *tokens*. We convert with a per-model
-characters-per-token ratio. When a message completes we know the exact token count and the
-exact characters streamed, so `ratio ← EWMA(ratio, chars/tokens)` (clamped to `[1.2, 12]`). The
-estimate is seeded at `4` (English-ish) and converges to the model's real tokenizer within a
-message or two.
-
 ## The view projection — `view.js`
 
 `buildView({ live, last, session, status, config })` returns `{ state, lines }`, where each line

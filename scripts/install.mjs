@@ -42,7 +42,6 @@ function parseArgs(argv) {
     else if (t === "--dry-run") a.dryRun = true;
     else if (t === "--uninstall" || t === "--remove") a.uninstall = true;
     else if (t === "--print") a.print = true;
-    else if (t === "--global") a.global = true;
     else if (t === "--dir") a.dir = argv[++i];
     else if (t === "--help" || t === "-h") a.help = true;
     else a._.push(t);

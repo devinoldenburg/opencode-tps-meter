@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-20
+
+### Fixed
+
+- **Documentation accuracy pass.** Removed a duplicated "Calibration" section in
+  `ARCHITECTURE.md`; corrected the public `exports` key notation (`.` not `./`) in
+  `VERSIONING.md`; documented the previously-undocumented `showSparkline` option and the
+  `OPENCODE_TPS_METER=0` disable form in `README.md`; added `--help` to the documented
+  installer flags (README + CHANGELOG); updated the internal `NOTES.md` to reflect the public,
+  published repository.
+- Removed a dead, never-read `--global` flag branch from `scripts/install.mjs` (no behavior
+  change).
+
 ## [0.1.0] — 2026-06-20
 
 Initial release.
@@ -32,12 +45,13 @@ Initial release.
 - **Theme-aware colors** with per-tone overrides; configurable metric (default `generated`),
   gap threshold, detail level, sparkline, and labels, via plugin options or environment variables.
 - **Installer** (`scripts/install.mjs`, the package bin) — idempotent, reversible, with
-  `--local` / `--dir` / `--dry-run` / `--uninstall` / `--print` modes.
+  `--local` / `--dir` / `--no-install` / `--dry-run` / `--uninstall` / `--print` / `--help` modes.
 - **Pure, framework-free core** (`plugins/tps/*.js`) with **62 unit + integration tests**
   asserting hand-computed exact expectations.
 - **Tooling**: a runnable terminal demo (`tools/demo.mjs`, with a tool-call gap and a
   deterministic `--ci` mode), a Bun-based plugin verifier (`tools/verify-plugin.mjs`), and a peer
   installer (`tools/install-peers.mjs`).
 
-[Unreleased]: https://github.com/devinoldenburg/opencode-tps-meter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/devinoldenburg/opencode-tps-meter/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.1
 [0.1.0]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.0
