@@ -64,7 +64,7 @@
     "url": "https://github.com/devinoldenburg/opencode-tps-meter/issues"
   },
   "homepage": "https://github.com/devinoldenburg/opencode-tps-meter#readme",
-  "author": "Devin Oldenburg <https://github.com/devinoldenburg>",
+  "author": "Devin Oldenburg (https://github.com/devinoldenburg)",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
