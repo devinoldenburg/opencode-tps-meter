@@ -43,8 +43,11 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Install peer runtime (no-save)
-        run: npm install --no-save solid-js @opentui/solid
+      # solid-js / @opentui/solid are *optional* peerDependencies, which npm won't
+      # install even when asked directly; install-peers.mjs works around that by
+      # installing them in a clean project and copying them into node_modules.
+      - name: Install peer runtime
+        run: node tools/install-peers.mjs
 
       - name: Verify plugin module loads + wires correctly
         run: bun tools/verify-plugin.mjs

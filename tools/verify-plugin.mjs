@@ -20,7 +20,7 @@ try {
   await import("@opentui/solid");
   await import("solid-js");
 } catch {
-  console.log("⏭  skip: @opentui/solid / solid-js not installed (run `npm i --no-save solid-js @opentui/solid` then `bun tools/verify-plugin.mjs`)");
+  console.log("⏭  skip: @opentui/solid / solid-js not installed — run `npm run verify:plugin` (or `node tools/install-peers.mjs` then `bun tools/verify-plugin.mjs`)");
   process.exit(0);
 }
 
@@ -88,3 +88,9 @@ try {
 }
 
 console.log("\n✅ plugin module verified under the @opentui/solid runtime");
+
+// Constructing the component (above) started the plugin's live-tick setInterval,
+// and the expected "No renderer" throw escaped before onCleanup could run, so the
+// timer is orphaned and would keep this process (and CI) alive forever. In the
+// real TUI the runtime owns mount/unmount and clears it; here we exit explicitly.
+process.exit(0);

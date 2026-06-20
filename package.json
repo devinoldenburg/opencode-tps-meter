@@ -30,6 +30,8 @@
     "test": "node --test",
     "test:coverage": "node --experimental-test-coverage --test",
     "demo": "node tools/demo.mjs",
+    "peers": "node tools/install-peers.mjs",
+    "verify:plugin": "node tools/install-peers.mjs && bun tools/verify-plugin.mjs",
     "pack:check": "npm pack --dry-run",
     "validate": "npm test && npm run pack:check"
   },

@@ -164,7 +164,7 @@ npm test                 # 51 unit tests over the pure core (node --test)
 npm run test:coverage    # with coverage
 node tools/demo.mjs       # animated terminal demo (no OpenCode needed)
 node tools/demo.mjs --ci  # deterministic frames, doubles as a smoke test
-bun tools/verify-plugin.mjs   # load the real TSX under @opentui/solid and verify wiring
+npm run verify:plugin    # load the real TSX under @opentui/solid + verify wiring (needs bun)
 npm run pack:check       # inspect the publishable tarball
 ```
 
