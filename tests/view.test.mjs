@@ -20,44 +20,42 @@ test("no activity renders nothing", () => {
   assert.equal(renderText(v), "");
 });
 
-test("idle-with-history projects exact, provider-reported lines", () => {
+test("idle-with-history projects throughput + timing only (no native-dup stats)", () => {
   const last = messageStats(LAST_MSG, 1420); // ttft 420ms, decode 2080ms -> 150 tok/s
   const session = aggregate([last]);
   const v = buildView({ live: null, last, session, status: "idle" });
   assert.equal(v.state, "idle");
+  // No token totals and no cost (OpenCode's native Context shows those).
   assert.equal(
     renderText(v),
     [
       "TPS  150 tok/s",
-      "last 150 tok/s  ttft 420ms · 312 tok · 2.1s",
+      "last 150 tok/s  ttft 420ms",
       "avg  150 tok/s  peak 150",
-      "Σ    312 tok · 1 msg · $0.012",
     ].join("\n"),
   );
 });
 
-test("streaming projects the live headline, sparkline, and running totals", () => {
-  const live = {
-    rate: 120,
-    smooth: 118,
-    peak: 130,
-    total: 240,
-    count: 20,
-    active: true,
-    series: [0, 30, 60, 90, 120],
-    elapsedSec: 2,
-  };
+test("streaming projects the live (active-gen) headline, sparkline, and peak", () => {
+  const live = { tps: 120, active: true, peak: 130, series: [0, 30, 60, 90, 120], gaps: 0, idleMs: 0 };
   const v = buildView({ live, last: null, session: null, status: "busy" });
   assert.equal(v.state, "live");
   const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
   assert.equal(lines[0], "TPS  120 tok/s"); // no emoji, no live/last badge
   assert.equal(lines[1].length, 24); // sparkline rendered at default width
   assert.ok(lines[1].endsWith("█")); // peak value tops out
-  assert.equal(lines[2], "now  240 tok · peak 130");
+  assert.equal(lines[2], "now  peak 130 tok/s"); // peak only — no token total (native)
+});
+
+test("streaming surfaces excluded wait time when a tool gap occurred", () => {
+  const live = { tps: 200, active: true, peak: 240, series: [200], gaps: 1, idleMs: 5000 };
+  const v = buildView({ live, status: "busy" });
+  const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
+  assert.ok(lines.some((l) => l.includes("−5s wait")), `expected an excluded-wait note in ${JSON.stringify(lines)}`);
 });
 
 test("live headline segment is toned 'accent', idle is 'value'", () => {
-  const live = { rate: 80, smooth: 80, peak: 80, total: 100, count: 5, active: true, series: [80], elapsedSec: 1 };
+  const live = { tps: 80, active: true, peak: 80, series: [80], gaps: 0, idleMs: 0 };
   const liveView = buildView({ live, status: "busy" });
   const headlineTone = liveView.lines[0].segments.find((s) => s.text === "80").tone;
   assert.equal(headlineTone, "accent");
@@ -94,7 +92,7 @@ test("session status is authoritative over the meter's trailing window", () => {
 });
 
 test("busy status forces live even if the meter just started (no window yet)", () => {
-  const justStarted = { rate: 40, smooth: 40, peak: 40, total: 12, count: 2, active: false, series: [40], elapsedSec: 0.1 };
+  const justStarted = { tps: 40, active: false, peak: 40, series: [40], gaps: 0, idleMs: 0 };
   const v = buildView({ live: justStarted, last: null, session: null, status: "busy" });
   assert.equal(v.state, "live");
   // headline is the live rate, toned 'accent' (the only live/idle cue now that the badge is gone)

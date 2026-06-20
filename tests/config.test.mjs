@@ -7,10 +7,14 @@ test("defaults when given nothing", () => {
   assert.equal(c.enabled, true);
   assert.equal(c.order, 150);
   assert.equal(c.slot, "sidebar_content");
-  assert.equal(c.metric, "output");
+  assert.equal(c.metric, "generated");
   assert.equal(c.detail, "full");
   assert.equal(c.windowMs, 3000);
+  assert.equal(c.gapMs, 1500);
   assert.equal(c.pollMs, 250);
+  assert.equal(c.showCost, false); // native Context already shows cost
+  assert.equal(c.showTotals, false);
+  assert.equal(c.showWaits, true);
 });
 
 test("options override defaults", () => {
@@ -44,14 +48,20 @@ test("invalid values fall back to defaults / clamps", () => {
   assert.equal(c.windowMs, DEFAULTS.windowMs); // non-numeric -> default
   assert.equal(c.pollMs, 50); // clamped to floor
   assert.equal(c.seriesLength, 1); // clamped to floor
-  assert.equal(c.metric, "output"); // unknown -> output
+  assert.equal(c.metric, "generated"); // unknown -> generated (default)
 });
 
-test("metric uses OR-semantics: either source can opt into 'generated'", () => {
-  assert.equal(resolveConfig({ metric: "generated" }, {}).metric, "generated");
-  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_METRIC: "generated" }).metric, "generated");
-  assert.equal(resolveConfig({ metric: "output" }, { OPENCODE_TPS_METER_METRIC: "generated" }).metric, "generated");
+test("metric defaults to generated; either source can opt into 'output'", () => {
+  assert.equal(resolveConfig({}, {}).metric, "generated");
   assert.equal(resolveConfig({ metric: "output" }, {}).metric, "output");
+  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_METRIC: "output" }).metric, "output");
+  assert.equal(resolveConfig({ metric: "generated" }, { OPENCODE_TPS_METER_METRIC: "output" }).metric, "output");
+});
+
+test("gapMs override + clamp", () => {
+  assert.equal(resolveConfig({ gapMs: 2500 }, {}).gapMs, 2500);
+  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_GAP_MS: "800" }).gapMs, 800);
+  assert.equal(resolveConfig({ gapMs: 10 }, {}).gapMs, 100); // clamped to floor
 });
 
 test("colors object passes through, non-object ignored", () => {

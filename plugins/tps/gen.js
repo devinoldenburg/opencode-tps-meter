@@ -132,6 +132,11 @@ export class GenerationTimer {
     return this._lastAt;
   }
 
+  /** Tokens of prefill/resume ("prime") chunks, excluded from the decode numerator. */
+  get primeTokens() {
+    return this._primeTokens;
+  }
+
   /** Tokens credited to the active-decode window (total minus prefill/resume chunks). */
   get decodeTokens() {
     return Math.max(0, this._tokens - this._primeTokens);
@@ -150,6 +155,7 @@ export class GenerationTimer {
   snapshot() {
     return {
       tokens: this._tokens,
+      primeTokens: this._primeTokens,
       decodeTokens: this.decodeTokens,
       activeMs: this._activeMs,
       idleMs: this._idleMs,

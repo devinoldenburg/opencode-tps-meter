@@ -8,6 +8,7 @@
  */
 
 export { RateMeter } from "./meter.js";
+export { GenerationTimer, DEFAULT_GAP_THRESHOLD_MS } from "./gen.js";
 export {
   messageStats,
   aggregate,

@@ -19,18 +19,22 @@ const DEFAULTS = {
   label: "TPS",
   unit: "tok/s",
   detail: "full", // "full" | "compact" | "minimal"
-  metric: "output", // "output" | "generated" — which TPS to headline
+  metric: "generated", // "generated" (output+reasoning) | "output" — which TPS to headline
   sparkWidth: 24,
-  showCost: true,
-  showCache: false,
-  showSession: true,
   showSparkline: true,
+  showSession: true,
+  showWaits: true, // surface the excluded tool/wait time as a precision signal
+  // OpenCode's native Context section already shows total tokens, % context, and
+  // cost — so those are OFF by default here to avoid duplicating native stats.
+  showTotals: false,
+  showCost: false,
+  showCache: false,
 };
 
 /**
  * @param {object} input
- * @param {object|null} input.live      RateMeter snapshot (meter.snapshot(now)) or null.
- * @param {object|null} input.last      messageStats() for the most-recent message, or null.
+ * @param {object|null} input.live      Live snapshot `{ tps, active, series, peak, gaps?, idleMs? }` or null.
+ * @param {object|null} input.last      messageStats() for the most-recent completed message, or null.
  * @param {object|null} input.session   aggregate() over the session, or null.
  * @param {string} [input.status]       "busy" | "idle" | "retry" | undefined.
  * @param {object} [input.config]       Display config (see DEFAULTS).
@@ -47,8 +51,8 @@ export function buildView(input = {}) {
   // is authoritative (it flips to "idle" the moment a turn completes), so trust
   // it when present; the meter's trailing window is only a fallback for runtimes
   // that don't surface status. This keeps a completed message from showing a
-  // stale live rate while its 3s rate window drains (the headline snaps to the
-  // exact figure instead).
+  // stale live rate while its rate window drains (the headline snaps to the exact
+  // figure instead).
   const streaming =
     status === "busy" ? true : status === "idle" || status === "retry" ? false : !!(live && live.active);
   const hasHistory = !!last || (session && session.count > 0);
@@ -57,17 +61,14 @@ export function buildView(input = {}) {
     return { state: "none", lines: [] };
   }
 
-  const metricKey = cfg.metric === "generated" ? "generatedTps" : "outputTps";
-  const headline = streaming
-    ? (live ? live.rate : null)
-    : last
-      ? last[metricKey]
-      : null;
+  const metricKey = cfg.metric === "output" ? "outputTps" : "generatedTps";
+  const avgKey = cfg.metric === "output" ? "avgOutputTps" : "avgGeneratedTps";
+  const headline = streaming ? (live ? live.tps : null) : last ? last[metricKey] : null;
 
   const lines = [];
   const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null) });
 
-  // ── Header + headline number ──────────────────────────────────────────────
+  // ── Header + headline number (active-generation TPS) ──────────────────────
   const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
   const headerSegs = [{ text: headerLabel, tone: "header" }];
   if (headline !== null && headline !== undefined) {
@@ -79,52 +80,45 @@ export function buildView(input = {}) {
 
   // ── Sparkline of recent live rates ────────────────────────────────────────
   if (cfg.showSparkline && live && Array.isArray(live.series) && live.series.length) {
-    const spark = sparkline(live.series, { width: cfg.sparkWidth });
-    push("spark", [{ text: spark, tone: streaming ? "accent" : "muted" }]);
+    push("spark", [{ text: sparkline(live.series, { width: cfg.sparkWidth }), tone: streaming ? "accent" : "muted" }]);
   }
 
   if (cfg.detail === "minimal") return { state: streaming ? "live" : "idle", lines };
 
-  // ── Last message: exact, provider-reported throughput ─────────────────────
+  // ── Last message: exact generation rate, TTFT, and excluded wait ──────────
   if (last && last.done) {
     const detail = [];
-    if (last.ttftMs !== null && last.ttftMs !== undefined) {
-      detail.push(`ttft ${fmtMs(last.ttftMs)}`);
-    }
-    detail.push(`${fmtTokens(last.output)} tok`);
-    if (last.decodeMs) detail.push(fmtMs(last.decodeMs));
+    if (last.ttftMs !== null && last.ttftMs !== undefined) detail.push(`ttft ${fmtMs(last.ttftMs)}`);
+    if (cfg.showWaits && last.gaps > 0 && last.idleMs > 0) detail.push(`−${fmtMs(last.idleMs)} wait`);
     push("last", [
       { text: "last ", tone: "label" },
       { text: `${fmtRate(last[metricKey])} ${cfg.unit}`, tone: "value" },
-      { text: `  ${detail.join(" · ")}`, tone: "muted" },
+      { text: detail.length ? `  ${detail.join(" · ")}` : "", tone: "muted" },
     ]);
   } else if (streaming && live) {
-    // Active message not yet finalized: show what we can measure live.
-    const bits = [`${fmtTokens(Math.round(live.total))} tok`];
-    if (live.peak) bits.push(`peak ${fmtRate(live.peak)}`);
-    push("live-detail", [
-      { text: "now  ", tone: "label" },
-      { text: bits.join(" · "), tone: "muted" },
-    ]);
+    // Active message not yet finalized: peak so far + any wait already excluded.
+    const bits = [];
+    if (live.peak) bits.push(`peak ${fmtRate(live.peak)} ${cfg.unit}`);
+    if (cfg.showWaits && live.gaps > 0 && live.idleMs > 0) bits.push(`−${fmtMs(live.idleMs)} wait`);
+    if (bits.length) push("live-detail", [{ text: "now  ", tone: "label" }, { text: bits.join(" · "), tone: "muted" }]);
   }
 
-  // ── Session aggregate ─────────────────────────────────────────────────────
+  // ── Session aggregate: throughput only (totals/cost are native) ───────────
   if (cfg.showSession && session && session.count > 0) {
     push("avg", [
       { text: "avg  ", tone: "label" },
-      { text: `${fmtRate(session[cfg.metric === "generated" ? "avgGeneratedTps" : "avgOutputTps"])} ${cfg.unit}`, tone: "value" },
+      { text: `${fmtRate(session[avgKey])} ${cfg.unit}`, tone: "value" },
       { text: session.peakTps ? `  peak ${fmtRate(session.peakTps)}` : "", tone: "muted" },
     ]);
 
-    const totals = [`${fmtTokens(session.output)} tok`, `${session.count} msg`];
-    if (cfg.showCache && (session.cacheRead || session.cacheWrite)) {
-      totals.push(`cache ${fmtTokens(session.cacheRead)}r`);
+    // Opt-in only — duplicates OpenCode's native Context section.
+    if (cfg.showTotals) {
+      const metricTokens = cfg.metric === "output" ? session.output : session.generated;
+      const totals = [`${fmtTokens(metricTokens)} tok`, `${session.count} msg`];
+      if (cfg.showCache && (session.cacheRead || session.cacheWrite)) totals.push(`cache ${fmtTokens(session.cacheRead)}r`);
+      if (cfg.showCost) totals.push(fmtCost(session.cost));
+      push("totals", [{ text: "Σ    ", tone: "label" }, { text: totals.join(" · "), tone: "muted" }]);
     }
-    if (cfg.showCost) totals.push(fmtCost(session.cost));
-    push("totals", [
-      { text: "Σ    ", tone: "label" },
-      { text: totals.join(" · "), tone: "muted" },
-    ]);
   }
 
   return { state: streaming ? "live" : "idle", lines };

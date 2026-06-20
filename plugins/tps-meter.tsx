@@ -31,6 +31,7 @@
 
 import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
 import { RateMeter } from "./tps/meter.js";
+import { GenerationTimer } from "./tps/gen.js";
 import {
   messageStats,
   aggregate,
@@ -59,10 +60,29 @@ function TpsView(props) {
     return t[TONE_TO_THEME[tone] || "text"] || t.text;
   };
 
+  // The sparkline uses a windowed instantaneous rate (visual texture). The PRECISE
+  // numbers come from per-message GenerationTimers, which measure active-generation
+  // time only — excluding tool calls, permission waits, and stalls inside a turn.
   const meter = new RateMeter({ windowMs: cfg.windowMs, seriesLength: cfg.seriesLength });
-  const firstTokenAt = new Map(); // messageID -> first-chunk arrival (ms)
+  const timers = new Map(); // messageID -> GenerationTimer (active-gen time, gap-excluded)
   const partLen = new Map(); // partID -> last observed text length
   let ratio = DEFAULT_CHARS_PER_TOKEN; // chars/token, self-calibrated per model
+  let currentMsgId = null; // message currently streaming (for the live headline)
+
+  const timerFor = (messageID) => {
+    let t = timers.get(messageID);
+    if (!t) {
+      t = new GenerationTimer({ gapThresholdMs: cfg.gapMs });
+      timers.set(messageID, t);
+    }
+    return t;
+  };
+  const timingFor = (messageID) => {
+    const t = timers.get(messageID);
+    return t
+      ? { firstTokenAt: t.firstAt, activeMs: t.activeMs, idleMs: t.idleMs, gaps: t.gaps, primeTokens: t.primeTokens }
+      : undefined;
+  };
 
   const [tick, setTick] = createSignal(0);
   const bump = () => setTick((x) => (x + 1) % 1_000_000);
@@ -86,8 +106,12 @@ function TpsView(props) {
               : Math.max(0, full - (partLen.get(part.id) || 0));
           partLen.set(part.id, full);
           if (added > 0) {
-            if (part.messageID && !firstTokenAt.has(part.messageID)) firstTokenAt.set(part.messageID, now);
-            meter.push(tokensFromChars(added, ratio), now);
+            const tokens = tokensFromChars(added, ratio);
+            if (part.messageID) {
+              timerFor(part.messageID).push(tokens, now); // precise active-gen time
+              currentMsgId = part.messageID;
+            }
+            meter.push(tokens, now); // windowed rate for the sparkline
             bump();
           }
         } catch {
@@ -112,20 +136,27 @@ function TpsView(props) {
               /* parts unavailable on this build — skip calibration this round */
             }
             if (chars > 0 && generated > 0) ratio = calibrateRatio(ratio, chars, generated);
+            // Lock this message's timer to the exact generated count; the measured
+            // active time is unchanged, so its rate becomes exact.
+            const t = timers.get(info.id);
+            if (t && generated > 0) t.setTokens(generated);
+            if (currentMsgId === info.id) currentMsgId = null; // turn finished
           }
         } catch {
           /* ignore */
         }
         bump();
       };
-      // Cleanup handlers so the per-session maps don't accumulate orphans. We must
-      // keep firstTokenAt for every *live* message (the view recomputes exact
-      // decode-window stats for all of them), so we only drop an entry when its
-      // message is actually removed from the session.
+      // Keep the per-message timers from accumulating orphans. A timer is needed for
+      // as long as its message is in the session (the view recomputes exact stats
+      // for all of them), so only drop it when the message is actually removed.
       const onMessageRemoved = (event) => {
         try {
           const messageID = event?.properties?.messageID;
-          if (messageID) firstTokenAt.delete(messageID);
+          if (messageID) {
+            timers.delete(messageID);
+            if (currentMsgId === messageID) currentMsgId = null;
+          }
         } catch {
           /* ignore */
         }
@@ -192,12 +223,14 @@ function TpsView(props) {
     }
     const stats = [];
     let last = null;
+    let inflightId = null;
     for (const m of messages) {
       if (!isAssistant(m)) continue;
-      const s = messageStats(m, firstTokenAt.get(m.id));
+      const s = messageStats(m, timingFor(m.id));
       if (!s) continue;
       stats.push(s);
       if (s.done) last = s; // most-recent completed message
+      else inflightId = m.id; // assistant message still streaming
     }
     const session = aggregate(stats);
     let status;
@@ -206,8 +239,18 @@ function TpsView(props) {
     } catch {
       status = undefined;
     }
+    // The live headline is the in-flight message's active-generation rate.
+    const inflight = (inflightId && timers.get(inflightId)) || (currentMsgId && timers.get(currentMsgId)) || null;
+    const live = {
+      tps: inflight ? inflight.tps() : null,
+      active: meter.active(now),
+      series: meter.series(),
+      peak: meter.peak,
+      gaps: inflight ? inflight.gaps : 0,
+      idleMs: inflight ? inflight.idleMs : 0,
+    };
     return buildView({
-      live: meter.snapshot(now),
+      live,
       last,
       session,
       status,
@@ -218,9 +261,12 @@ function TpsView(props) {
         label: cfg.label,
         unit: cfg.unit,
         sparkWidth: cfg.sparkWidth,
+        showSparkline: cfg.showSparkline,
+        showSession: cfg.showSession,
+        showWaits: cfg.showWaits,
+        showTotals: cfg.showTotals,
         showCost: cfg.showCost,
         showCache: cfg.showCache,
-        showSession: cfg.showSession,
       },
     });
   });

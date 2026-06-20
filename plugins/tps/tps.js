@@ -56,13 +56,21 @@ export function isAssistant(msg) {
 /**
  * Exact throughput stats for one assistant message.
  *
- * @param {any} msg                    OpenCode AssistantMessage.
- * @param {number} [firstTokenAt]      Measured epoch-ms of the first streamed
- *                                     token for this message (for decode-only
- *                                     rate + TTFT). Optional.
- * @returns {object|null}              Null if `msg` is not a usable assistant message.
+ * The decode window — the denominator of the TPS — is chosen by precision, best
+ * first:
+ *   1. "active"      measured active-generation time (a GenerationTimer's
+ *                    `activeMs`): excludes prefill AND every mid-turn wait (tool
+ *                    calls, permissions, stalls). This is the real generation TPS.
+ *   2. "first-token" `completed − firstTokenAt`: excludes prefill only (still
+ *                    includes tool/wait time inside the turn).
+ *   3. "end-to-end"  `completed − created`: includes everything.
+ *
+ * @param {any} msg          OpenCode AssistantMessage.
+ * @param {number|object} [timing]  Either a bare `firstTokenAt` (ms), or an object
+ *   `{ firstTokenAt, activeMs, idleMs, gaps }` from the streaming GenerationTimer.
+ * @returns {object|null}    Null if `msg` is not a usable assistant message.
  */
-export function messageStats(msg, firstTokenAt) {
+export function messageStats(msg, timing) {
   if (!isAssistant(msg)) return null;
   const created = nn(msg.time?.created);
   const completed = nn(msg.time?.completed);
@@ -75,11 +83,43 @@ export function messageStats(msg, firstTokenAt) {
   const done = completed !== null && created !== null && completed >= created;
   const e2eMs = done ? completed - created : null;
 
-  const ft = nn(firstTokenAt);
-  const haveDecodeWindow =
-    done && ft !== null && created !== null && ft >= created && completed >= ft;
-  const decodeMs = haveDecodeWindow ? completed - ft : e2eMs;
+  let ft = null;
+  let activeMs = null;
+  let idleMs = 0;
+  let gaps = 0;
+  let primeTokens = 0;
+  if (timing && typeof timing === "object") {
+    ft = nn(timing.firstTokenAt);
+    activeMs = nn(timing.activeMs);
+    idleMs = n0(timing.idleMs);
+    gaps = n0(timing.gaps);
+    primeTokens = n0(timing.primeTokens);
+  } else {
+    ft = nn(timing);
+  }
+
   const ttftMs = ft !== null && created !== null && ft >= created ? ft - created : null;
+
+  let decodeMs;
+  let decodeSource;
+  if (activeMs !== null && activeMs > 0) {
+    decodeMs = activeMs; // measured active generation time — the precise window
+    decodeSource = "active";
+  } else if (done && ft !== null && created !== null && ft >= created && completed >= ft) {
+    decodeMs = completed - ft; // first-token window (excludes prefill only)
+    decodeSource = "first-token";
+  } else {
+    decodeMs = e2eMs; // whole turn
+    decodeSource = "end-to-end";
+  }
+
+  // On the measured-active window we also exclude the prefill/resume ("prime")
+  // tokens from the numerator — they were decoded during the time we excluded — so
+  // the rate matches the live GenerationTimer exactly. On the other windows the
+  // first token's time IS in the denominator, so its tokens stay in the numerator.
+  const onActive = decodeSource === "active";
+  const decodeGenerated = onActive ? Math.max(0, generated - primeTokens) : generated;
+  const decodeOutput = onActive ? Math.max(0, output - Math.min(primeTokens, output)) : output;
 
   return {
     id: msg.id,
@@ -98,14 +138,21 @@ export function messageStats(msg, firstTokenAt) {
     ttftMs,
     e2eMs,
     decodeMs,
-    /** decode-window output TPS (excludes prefill); falls back to e2e when no TTFT. */
-    outputTps: rate(output, decodeMs),
-    /** decode-window generated (output+reasoning) TPS. */
-    generatedTps: rate(generated, decodeMs),
+    activeMs,
+    idleMs,
+    gaps,
+    primeTokens,
+    decodeOutput,
+    decodeGenerated,
+    decodeSource,
+    /** decode-window output TPS (prime-corrected on the active window). */
+    outputTps: rate(decodeOutput, decodeMs),
+    /** decode-window generated (output+reasoning) TPS (prime-corrected on the active window). */
+    generatedTps: rate(decodeGenerated, decodeMs),
     /** strict end-to-end output TPS over created→completed. */
     e2eTps: rate(output, e2eMs),
-    /** whether decodeMs excludes prefill (a real TTFT was supplied). */
-    decodeExcludesPrefill: haveDecodeWindow,
+    /** true unless the window is the whole turn (i.e. it excludes at least prefill). */
+    decodeExcludesPrefill: decodeSource !== "end-to-end",
   };
 }
 
@@ -121,12 +168,16 @@ export function aggregate(statList) {
   let output = 0;
   let reasoning = 0;
   let generated = 0;
+  let decodeOutput = 0; // prime-corrected (matches the per-message decode numerators)
+  let decodeGenerated = 0;
   let input = 0;
   let cacheRead = 0;
   let cacheWrite = 0;
   let cost = 0;
   let decodeMs = 0;
   let e2eMs = 0;
+  let idleMs = 0;
+  let gaps = 0;
   let peakTps = 0;
   let ttftSum = 0;
   let ttftCount = 0;
@@ -137,12 +188,16 @@ export function aggregate(statList) {
     output += s.output;
     reasoning += s.reasoning;
     generated += s.generated;
+    decodeOutput += s.decodeOutput ?? s.output;
+    decodeGenerated += s.decodeGenerated ?? s.generated;
     input += s.input;
     cacheRead += s.cacheRead;
     cacheWrite += s.cacheWrite;
     cost += s.cost;
     if (s.decodeMs) decodeMs += s.decodeMs;
     if (s.e2eMs) e2eMs += s.e2eMs;
+    if (s.idleMs) idleMs += s.idleMs;
+    if (s.gaps) gaps += s.gaps;
     if (s.generatedTps && s.generatedTps > peakTps) peakTps = s.generatedTps;
     if (s.ttftMs !== null) {
       ttftSum += s.ttftMs;
@@ -161,8 +216,10 @@ export function aggregate(statList) {
     cost,
     decodeSec: decodeMs / 1000,
     e2eSec: e2eMs / 1000,
-    avgOutputTps: rate(output, decodeMs),
-    avgGeneratedTps: rate(generated, decodeMs),
+    idleSec: idleMs / 1000,
+    gaps,
+    avgOutputTps: rate(decodeOutput, decodeMs),
+    avgGeneratedTps: rate(decodeGenerated, decodeMs),
     avgE2eTps: rate(output, e2eMs),
     peakTps: peakTps || null,
     avgTtftMs: ttftCount ? ttftSum / ttftCount : null,

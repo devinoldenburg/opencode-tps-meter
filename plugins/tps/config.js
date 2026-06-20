@@ -19,17 +19,23 @@ export const DEFAULTS = {
   order: 150, // just after the native Context/usage section (order 100)
   slot: "sidebar_content", // stacking slot — additive, never replaces native content
   pollMs: 250, // live re-sample cadence (sparkline animation + decay)
-  windowMs: 3000, // trailing window for the live rate
+  windowMs: 3000, // trailing window for the live sparkline rate
+  gapMs: 1500, // inter-token gap at/above which generation is "paused" (tool/wait) and excluded
   seriesLength: 40, // sparkline history length
-  metric: "output", // "output" | "generated"
+  metric: "generated", // "generated" (output+reasoning) | "output"
   detail: "full", // "full" | "compact" | "minimal"
   icon: "", // optional prefix glyph; empty = none (clean/professional default)
   label: "TPS",
   unit: "tok/s",
   sparkWidth: 24,
-  showCost: true,
-  showCache: false,
+  showSparkline: true,
   showSession: true,
+  showWaits: true, // surface excluded tool/wait time (precision signal)
+  // OpenCode's native Context section already shows tokens / context% / cost, so
+  // these are OFF by default to avoid duplicating native stats.
+  showTotals: false,
+  showCost: false,
+  showCache: false,
   colors: null, // optional { tone: hexString }
 };
 
@@ -59,8 +65,9 @@ export function resolveConfig(options, env) {
     e.OPENCODE_TPS_METER_DISABLE === "1" ||
     e.OPENCODE_TPS_METER_DISABLE === "true";
 
+  // "output" only if explicitly requested; default (and anything else) → generated.
   const metric =
-    o.metric === "generated" || e.OPENCODE_TPS_METER_METRIC === "generated" ? "generated" : "output";
+    o.metric === "output" || e.OPENCODE_TPS_METER_METRIC === "output" ? "output" : "generated";
   const detailRaw = o.detail || e.OPENCODE_TPS_METER_DETAIL || DEFAULTS.detail;
   const detail = DETAILS.includes(detailRaw) ? detailRaw : DEFAULTS.detail;
 
@@ -70,6 +77,7 @@ export function resolveConfig(options, env) {
     slot: typeof o.slot === "string" && o.slot ? o.slot : e.OPENCODE_TPS_METER_SLOT || DEFAULTS.slot,
     pollMs: num(o.pollMs, DEFAULTS.pollMs, 50),
     windowMs: num(o.windowMs ?? e.OPENCODE_TPS_METER_WINDOW_MS, DEFAULTS.windowMs, 250),
+    gapMs: num(o.gapMs ?? e.OPENCODE_TPS_METER_GAP_MS, DEFAULTS.gapMs, 100),
     seriesLength: Math.floor(num(o.seriesLength, DEFAULTS.seriesLength, 1)),
     metric,
     detail,
@@ -77,9 +85,12 @@ export function resolveConfig(options, env) {
     label: typeof o.label === "string" ? o.label : DEFAULTS.label,
     unit: typeof o.unit === "string" ? o.unit : DEFAULTS.unit,
     sparkWidth: Math.floor(num(o.sparkWidth, DEFAULTS.sparkWidth, 0)),
-    showCost: o.showCost !== false,
-    showCache: o.showCache === true,
+    showSparkline: o.showSparkline !== false,
     showSession: o.showSession !== false,
+    showWaits: o.showWaits !== false,
+    showTotals: o.showTotals === true,
+    showCost: o.showCost === true,
+    showCache: o.showCache === true,
     colors: o.colors && typeof o.colors === "object" ? o.colors : null,
   };
 }
