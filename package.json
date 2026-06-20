@@ -1,0 +1,88 @@
+{
+  "name": "opencode-tps-meter",
+  "version": "0.1.0",
+  "description": "A precise tokens-per-second (TPS) meter for the OpenCode TUI sidebar — live throughput, time-to-first-token, and per-session averages, measured from the OpenCode event stream.",
+  "type": "module",
+  "main": "plugins/tps-meter.tsx",
+  "exports": {
+    ".": "./plugins/tps-meter.tsx",
+    "./tui": "./plugins/tps-meter.tsx",
+    "./core": "./plugins/tps/index.js",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "packageManager": "npm@10",
+  "bin": {
+    "opencode-tps-meter": "scripts/install.mjs",
+    "opencode-tps-meter-install": "scripts/install.mjs"
+  },
+  "files": [
+    "plugins/",
+    "scripts/install.mjs",
+    "ARCHITECTURE.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --experimental-test-coverage --test",
+    "demo": "node tools/demo.mjs",
+    "pack:check": "npm pack --dry-run",
+    "validate": "npm test && npm run pack:check"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "opencode-tui-plugin",
+    "tui",
+    "sidebar",
+    "tps",
+    "tokens-per-second",
+    "throughput",
+    "tokens",
+    "metrics",
+    "stats",
+    "telemetry",
+    "ttft",
+    "llm",
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "plugin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devinoldenburg/opencode-tps-meter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/devinoldenburg/opencode-tps-meter/issues"
+  },
+  "homepage": "https://github.com/devinoldenburg/opencode-tps-meter#readme",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.17.6"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.15.0",
+    "@opentui/solid": "*",
+    "solid-js": "*"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  }
+}
