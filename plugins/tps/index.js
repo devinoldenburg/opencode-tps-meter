@@ -29,3 +29,4 @@ export {
   SPARK_CHARS,
 } from "./format.js";
 export { buildView, renderText, VIEW_DEFAULTS } from "./view.js";
+export { resolveConfig, TONE_TO_THEME, DEFAULTS, isFalsy } from "./config.js";
