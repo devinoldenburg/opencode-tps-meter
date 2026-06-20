@@ -7,6 +7,7 @@ stalls). It shows nothing OpenCode's native sidebar already shows (no token tota
 replaces none of its sections.
 
 [![CI](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml/badge.svg)](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@devinoldenburg/opencode-tps-meter?label=npm)](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![OpenCode plugin](https://img.shields.io/badge/OpenCode-TUI%20plugin-7c5cff.svg)](https://opencode.ai)
 ![node >= 20.11](https://img.shields.io/badge/node-%3E%3D20.11-3c873a.svg)
@@ -64,14 +65,18 @@ The key idea: a turn's wall-clock includes tool execution and waits, so `tokens 
 
 ## Install
 
+> **Package name:** published to npm as **`@devinoldenburg/opencode-tps-meter`** (scoped). The
+> unscoped name `opencode-tps-meter` is owned on npm by an unrelated package, so this one ships
+> under the author's scope. The OpenCode plugin id and the global command stay `opencode-tps-meter`.
+
 ### Quick (recommended)
 
 ```bash
-npm install -g opencode-tps-meter   # once published
+npm install -g @devinoldenburg/opencode-tps-meter
 opencode-tps-meter                  # wires it into ~/.config/opencode and installs
 ```
 
-…or run the installer straight from a clone (works today, before any npm publish):
+…or run the installer straight from a clone:
 
 ```bash
 git clone https://github.com/devinoldenburg/opencode-tps-meter
@@ -89,12 +94,12 @@ Add it to your OpenCode config dir (e.g. `~/.config/opencode`):
 
 ```jsonc
 // tui.json
-{ "$schema": "https://opencode.ai/tui.json", "plugin": ["opencode-tps-meter"] }
+{ "$schema": "https://opencode.ai/tui.json", "plugin": ["@devinoldenburg/opencode-tps-meter"] }
 ```
 
 ```jsonc
 // package.json  (so the TUI can resolve it from node_modules)
-{ "dependencies": { "opencode-tps-meter": "latest" } }
+{ "dependencies": { "@devinoldenburg/opencode-tps-meter": "latest" } }
 ```
 
 then `npm install` in that directory and restart the TUI.
@@ -107,7 +112,7 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 {
   "$schema": "https://opencode.ai/tui.json",
   "plugin": [
-    ["opencode-tps-meter", { "metric": "output", "gapMs": 1000, "detail": "compact" }]
+    ["@devinoldenburg/opencode-tps-meter", { "metric": "output", "gapMs": 1000, "detail": "compact" }]
   ]
 }
 ```
@@ -196,6 +201,12 @@ SolidJS / `@opentui/solid` adapter. See the architecture doc for how they fit to
 - Node `>= 20.11` for the tooling and tests.
 - Peer deps (`@opentui/solid`, `solid-js`, `@opencode-ai/plugin`) are **optional** and supplied
   by the OpenCode TUI runtime at load time.
+
+## Releases & versioning
+
+This project follows [Semantic Versioning](https://semver.org/) — see [`VERSIONING.md`](./VERSIONING.md)
+for the policy and [`CHANGELOG.md`](./CHANGELOG.md) for the release history. Releases are
+published to npm automatically when a `v*` tag is pushed (the `Release` GitHub Actions workflow).
 
 ## License
 

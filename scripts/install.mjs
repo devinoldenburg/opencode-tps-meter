@@ -27,7 +27,10 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
-const PKG_NAME = "opencode-tps-meter";
+// The npm package name. Published under the @devinoldenburg scope because the
+// unscoped name `opencode-tps-meter` is already owned on npm by a different
+// author. OpenCode resolves the TUI plugin by THIS name from node_modules.
+const PKG_NAME = "@devinoldenburg/opencode-tps-meter";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function parseArgs(argv) {

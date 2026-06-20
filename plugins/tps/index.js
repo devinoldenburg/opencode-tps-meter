@@ -1,10 +1,10 @@
 /**
- * Public, framework-free core of opencode-tps-meter.
+ * Public, framework-free core of @devinoldenburg/opencode-tps-meter.
  *
  * Everything here is pure JS with no dependency on the OpenCode runtime or any
  * UI toolkit, so it can be imported by tests, the demo, or other tools:
  *
- *   import { RateMeter, messageStats, aggregate, buildView } from "opencode-tps-meter/core";
+ *   import { RateMeter, messageStats, aggregate, buildView } from "@devinoldenburg/opencode-tps-meter/core";
  */
 
 export { RateMeter } from "./meter.js";

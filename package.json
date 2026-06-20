@@ -1,5 +1,5 @@
 {
-  "name": "opencode-tps-meter",
+  "name": "@devinoldenburg/opencode-tps-meter",
   "version": "0.1.0",
   "description": "A precise tokens-per-second (TPS) meter for the OpenCode TUI sidebar — live throughput, time-to-first-token, and per-session averages, measured from the OpenCode event stream.",
   "type": "module",
@@ -23,6 +23,7 @@
     "scripts/install.mjs",
     "ARCHITECTURE.md",
     "CHANGELOG.md",
+    "VERSIONING.md",
     "LICENSE",
     "README.md"
   ],
@@ -63,6 +64,7 @@
     "url": "https://github.com/devinoldenburg/opencode-tps-meter/issues"
   },
   "homepage": "https://github.com/devinoldenburg/opencode-tps-meter#readme",
+  "author": "Devin Oldenburg <https://github.com/devinoldenburg>",
   "license": "MIT",
   "publishConfig": {
     "access": "public",
