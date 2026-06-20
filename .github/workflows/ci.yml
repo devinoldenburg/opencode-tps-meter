@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20.11", "20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Unit tests
+        run: node --test
+
+      - name: Demo smoke test (deterministic)
+        run: node tools/demo.mjs --ci
+
+      - name: Pack check
+        run: npm pack --dry-run
+
+  verify-plugin:
+    name: verify plugin under @opentui/solid (bun)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install peer runtime (no-save)
+        run: npm install --no-save solid-js @opentui/solid
+
+      - name: Verify plugin module loads + wires correctly
+        run: bun tools/verify-plugin.mjs
