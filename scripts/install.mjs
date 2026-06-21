@@ -162,7 +162,8 @@ function main() {
   // ── tui.json: the plugin list the TUI reads ────────────────────────────────
   const tui = readJson(tuiPath, { $schema: "https://opencode.ai/tui.json" });
   if (!Array.isArray(tui.plugin)) tui.plugin = [];
-  const had = tui.plugin.some(isPluginEntry);
+  const existingEntry = tui.plugin.find(isPluginEntry);
+  const had = !!existingEntry;
 
   if (args.uninstall) {
     if (!had) {
@@ -180,10 +181,13 @@ function main() {
     return;
   }
 
-  if (!had) {
-    tui.plugin.push(PLUGIN_SPEC);
+  const normalizedEntry = Array.isArray(existingEntry) ? [PLUGIN_SPEC, ...existingEntry.slice(1)] : PLUGIN_SPEC;
+  const alreadyCurrent = tui.plugin.some((p) => pluginName(p) === PLUGIN_SPEC);
+  if (!had || !alreadyCurrent || tui.plugin.some((p) => pluginName(p) === PKG_NAME)) {
+    tui.plugin = tui.plugin.filter((p) => !isPluginEntry(p));
+    tui.plugin.push(had ? normalizedEntry : PLUGIN_SPEC);
     writeJson(tuiPath, tui, args.dryRun);
-    console.log(C.green(`  ✓ added ${PLUGIN_SPEC} to tui.json`));
+    console.log(C.green(`  ✓ ${had ? "updated" : "added"} ${PLUGIN_SPEC} in tui.json`));
   } else {
     console.log(C.dim(`  • tui.json already lists ${PLUGIN_SPEC}`));
   }
