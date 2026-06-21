@@ -12,7 +12,7 @@
  * Dev/CI only — never shipped (the package `files` allowlist excludes tools/).
  */
 
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -36,11 +36,7 @@ console.log(`• installing ${PEERS.join(" ")} in a clean project (${tmp}) …`)
 try {
   execFileSync("npm", ["install", "--no-audit", "--no-fund", "--save-exact", ...PEERS], { cwd: tmp, stdio: "inherit" });
 
-  mkdirSync(dest, { recursive: true });
-  for (const p of PEER_DIRS) {
-    mkdirSync(dirname(join(dest, ...p.split("/"))), { recursive: true });
-    cpSync(join(tmp, "node_modules", ...p.split("/")), join(dest, ...p.split("/")), { recursive: true, force: true });
-  }
+  copyMissingPackages(join(tmp, "node_modules"), dest);
 
   const ok = PEER_DIRS.every((p) => existsSync(join(dest, ...p.split("/"))));
   if (!ok) {
@@ -50,4 +46,28 @@ try {
   console.log(`✓ peer runtime copied into ${dest}`);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+function copyMissingPackages(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const src = join(from, entry.name);
+    const dst = join(to, entry.name);
+    if (entry.name.startsWith("@")) {
+      mkdirSync(dst, { recursive: true });
+      for (const scoped of readdirSync(src, { withFileTypes: true })) {
+        if (!scoped.isDirectory()) continue;
+        copyPackage(join(src, scoped.name), join(dst, scoped.name));
+      }
+    } else {
+      copyPackage(src, dst);
+    }
+  }
+}
+
+function copyPackage(src, dst) {
+  if (existsSync(dst)) return;
+  mkdirSync(dirname(dst), { recursive: true });
+  cpSync(src, dst, { recursive: true, force: false, errorOnExist: true });
 }

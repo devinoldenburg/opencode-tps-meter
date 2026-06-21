@@ -3,10 +3,10 @@
   "version": "0.1.1",
   "description": "A precise tokens-per-second (TPS) meter for the OpenCode TUI sidebar — live throughput, time-to-first-token, and per-session averages, measured from the OpenCode event stream.",
   "type": "module",
-  "main": "plugins/tps/index.js",
+  "main": "plugins/tps/root.js",
   "types": "plugins/tps/index.d.ts",
   "exports": {
-    ".": "./plugins/tps/index.js",
+    ".": "./plugins/tps/root.js",
     "./tui": "./plugins/tps-meter.tsx",
     "./core": "./plugins/tps/index.js",
     "./package.json": "./package.json"

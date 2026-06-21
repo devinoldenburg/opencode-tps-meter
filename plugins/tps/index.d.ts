@@ -53,3 +53,5 @@ export function resolveConfig(options?: object, env?: object): object;
 export const TONE_TO_THEME: object;
 export const DEFAULTS: object;
 export function isFalsy(value: unknown): boolean;
+declare const plugin: { id: string; tui: (...args: unknown[]) => Promise<unknown> };
+export default plugin;
