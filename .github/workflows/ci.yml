@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Unit tests
         run: npm test
 
@@ -49,6 +52,9 @@ jobs:
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+
+      - name: Install Node dependencies
+        run: npm ci
 
       - name: Verify plugin module loads + wires correctly
         run: npm run verify:plugin
