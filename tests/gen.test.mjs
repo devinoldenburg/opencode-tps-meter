@@ -45,8 +45,8 @@ test("setTokens makes the rate exact at completion without changing measured tim
   const activeBefore = g.activeMs;
   g.setTokens(80); // exact provider count (prime offset = 7)
   assert.equal(g.activeMs, activeBefore); // time untouched
-  assert.equal(g.decodeTokens, 73); // 80 - 7 prime
-  assert.equal(g.tps(), 73 / (activeBefore / 1000));
+  assert.equal(g.decodeTokens, 80 - 80 * (7 / 77)); // prime offset scales with exact total
+  assert.equal(g.tps(), (80 - 80 * (7 / 77)) / (activeBefore / 1000));
 });
 
 test("gap threshold boundary is exclusive of the threshold", () => {
@@ -62,6 +62,24 @@ test("gap threshold boundary is exclusive of the threshold", () => {
   assert.equal(at.activeMs, 0);
   assert.equal(at.idleMs, 1000);
   assert.equal(at.gaps, 1);
+});
+
+test("tokenless chunks do not consume the post-gap prime marker", () => {
+  const g = new GenerationTimer({ gapThresholdMs: 1000 });
+  g.push(10, 0);
+  g.push(10, 100);
+  g.push(0, 2100);
+  g.push(10, 2200);
+  assert.equal(g.gaps, 1);
+  assert.equal(g.primeTokens, 20);
+  assert.equal(g.decodeTokens, 10);
+});
+
+test("non-monotonic timestamps are ignored", () => {
+  const g = new GenerationTimer();
+  g.push(10, 1000).push(10, 900).push(10, 1100);
+  assert.equal(g.tokens, 20);
+  assert.equal(g.activeMs, 100);
 });
 
 test("invalid threshold falls back to the default", () => {

@@ -32,7 +32,10 @@ test("options override defaults", () => {
 
 test("env can disable and override", () => {
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_DISABLE: "1" }).enabled, false);
+  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_DISABLE: "yes" }).enabled, false);
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER: "off" }).enabled, false);
+  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER: "" }).enabled, false);
+  assert.equal(resolveConfig({ enabled: true }, { OPENCODE_TPS_METER_DISABLE: "1" }).enabled, true);
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_METRIC: "generated" }).metric, "generated");
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_SLOT: "sidebar_footer" }).slot, "sidebar_footer");
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_WINDOW_MS: "1500" }).windowMs, 1500);
@@ -56,6 +59,14 @@ test("metric defaults to generated; either source can opt into 'output'", () => 
   assert.equal(resolveConfig({ metric: "output" }, {}).metric, "output");
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_METRIC: "output" }).metric, "output");
   assert.equal(resolveConfig({ metric: "generated" }, { OPENCODE_TPS_METER_METRIC: "output" }).metric, "output");
+  assert.equal(resolveConfig({ metric: "output" }, { OPENCODE_TPS_METER_METRIC: "generated" }).metric, "generated");
+});
+
+test("numeric and boolean config clamps cover edge cases", () => {
+  const c = resolveConfig({ order: -999, showTotals: true }, { OPENCODE_TPS_METER_SHOW_COST: "yes" });
+  assert.equal(c.order, 0);
+  assert.equal(c.showTotals, true);
+  assert.equal(c.showCost, true);
 });
 
 test("gapMs override + clamp", () => {

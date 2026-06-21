@@ -13,23 +13,7 @@
  */
 
 import { fmtRate, fmtTokens, fmtMs, fmtCost, sparkline } from "./format.js";
-
-const DEFAULTS = {
-  icon: "",
-  label: "TPS",
-  unit: "tok/s",
-  detail: "full", // "full" | "compact" | "minimal"
-  metric: "generated", // "generated" (output+reasoning) | "output" — which TPS to headline
-  sparkWidth: 24,
-  showSparkline: true,
-  showSession: true,
-  showWaits: true, // surface the excluded tool/wait time as a precision signal
-  // OpenCode's native Context section already shows total tokens, % context, and
-  // cost — so those are OFF by default here to avoid duplicating native stats.
-  showTotals: false,
-  showCost: false,
-  showCache: false,
-};
+import { DEFAULTS } from "./config.js";
 
 /**
  * @param {object} input
@@ -66,7 +50,7 @@ export function buildView(input = {}) {
   const headline = streaming ? (live ? live.tps : null) : last ? last[metricKey] : null;
 
   const lines = [];
-  const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null) });
+  const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null && s.text !== "") });
 
   // ── Header + headline number (active-generation TPS) ──────────────────────
   const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
@@ -95,7 +79,8 @@ export function buildView(input = {}) {
       { text: `${fmtRate(last[metricKey])} ${cfg.unit}`, tone: "value" },
       { text: detail.length ? `  ${detail.join(" · ")}` : "", tone: "muted" },
     ]);
-  } else if (streaming && live) {
+  }
+  if (streaming && live) {
     // Active message not yet finalized: peak so far + any wait already excluded.
     const bits = [];
     if (live.peak) bits.push(`peak ${fmtRate(live.peak)} ${cfg.unit}`);

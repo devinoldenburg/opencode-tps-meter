@@ -20,6 +20,7 @@ test("fmtRate buckets and placeholder", () => {
   assert.equal(fmtRate(100), "100");
   assert.equal(fmtRate(247.6), "248");
   assert.equal(fmtRate(1234), "1.2k");
+  assert.equal(fmtRate(999.5), "1k");
   assert.equal(fmtRate(0), "0");
   assert.equal(fmtRate(null), "–");
   assert.equal(fmtRate(-1), "–");
@@ -36,6 +37,7 @@ test("fmtTokens compacts k/M", () => {
   assert.equal(fmtTokens(1500), "1.5k");
   assert.equal(fmtTokens(1234567), "1.2M");
   assert.equal(fmtTokens(2000000), "2M");
+  assert.equal(fmtTokens(-1500), "0");
 });
 
 test("fmtMs scales ms/s/m", () => {
@@ -45,6 +47,8 @@ test("fmtMs scales ms/s/m", () => {
   assert.equal(fmtMs(9000), "9s");
   assert.equal(fmtMs(12000), "12s");
   assert.equal(fmtMs(65000), "1m05s");
+  assert.equal(fmtMs(59999), "60s");
+  assert.equal(fmtMs(119999), "2m00s");
   assert.equal(fmtMs(-1), "–");
 });
 
@@ -54,6 +58,7 @@ test("fmtCost formats by magnitude", () => {
   assert.equal(fmtCost(0.0123), "$0.012");
   assert.equal(fmtCost(0.5), "$0.500");
   assert.equal(fmtCost(1.5), "$1.50");
+  assert.equal(fmtCost(-0.01), "$0");
 });
 
 test("sparkline maps a ramp across all glyphs", () => {
@@ -84,6 +89,10 @@ test("sparkline renders an all-zero series as the empty glyph", () => {
 
 test("sparkline width 0 is empty", () => {
   assert.equal(sparkline([1, 2, 3], { width: 0 }), "");
+});
+
+test("sparkline tolerates an inverted min/max", () => {
+  assert.equal(sparkline([1, 2, 3], { width: 3, min: 10, max: 1 }), "▁▁▁");
 });
 
 test("bar fills proportionally", () => {

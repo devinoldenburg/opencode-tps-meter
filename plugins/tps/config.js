@@ -40,9 +40,19 @@ export const DEFAULTS = {
 };
 
 const DETAILS = ["full", "compact", "minimal"];
+const MIN_ORDER = 0;
+const MIN_POLL_MS = 50;
+const MIN_WINDOW_MS = 250;
+const MIN_GAP_MS = 100;
+const MIN_SERIES_LENGTH = 1;
+const MIN_SPARK_WIDTH = 0;
 
 export function isFalsy(v) {
-  return v === false || v === 0 || v === "0" || v === "false" || v === "off" || v === "no";
+  return v === false || v === 0 || v === "" || v === "0" || v === "false" || v === "off" || v === "no";
+}
+
+function isTruthy(v) {
+  return v === true || v === 1 || v === "1" || v === "true" || v === "on" || v === "yes";
 }
 
 function num(value, fallback, min) {
@@ -60,37 +70,41 @@ export function resolveConfig(options, env) {
   const o = options && typeof options === "object" ? options : {};
   const e = env || {};
   const disabled =
-    o.enabled === false ||
-    isFalsy(e.OPENCODE_TPS_METER) ||
-    e.OPENCODE_TPS_METER_DISABLE === "1" ||
-    e.OPENCODE_TPS_METER_DISABLE === "true";
+    o.enabled !== true &&
+    (o.enabled === false || isFalsy(e.OPENCODE_TPS_METER) || isTruthy(e.OPENCODE_TPS_METER_DISABLE));
 
   // "output" only if explicitly requested; default (and anything else) → generated.
-  const metric =
-    o.metric === "output" || e.OPENCODE_TPS_METER_METRIC === "output" ? "output" : "generated";
+  const metricRaw = e.OPENCODE_TPS_METER_METRIC ?? o.metric;
+  const metric = metricRaw === "output" ? "output" : "generated";
   const detailRaw = o.detail || e.OPENCODE_TPS_METER_DETAIL || DEFAULTS.detail;
   const detail = DETAILS.includes(detailRaw) ? detailRaw : DEFAULTS.detail;
 
   return {
     enabled: !disabled,
-    order: num(o.order, DEFAULTS.order),
+    order: num(o.order, DEFAULTS.order, MIN_ORDER),
     slot: typeof o.slot === "string" && o.slot ? o.slot : e.OPENCODE_TPS_METER_SLOT || DEFAULTS.slot,
-    pollMs: num(o.pollMs, DEFAULTS.pollMs, 50),
-    windowMs: num(o.windowMs ?? e.OPENCODE_TPS_METER_WINDOW_MS, DEFAULTS.windowMs, 250),
-    gapMs: num(o.gapMs ?? e.OPENCODE_TPS_METER_GAP_MS, DEFAULTS.gapMs, 100),
-    seriesLength: Math.floor(num(o.seriesLength, DEFAULTS.seriesLength, 1)),
+    pollMs: num(o.pollMs ?? e.OPENCODE_TPS_METER_POLL_MS, DEFAULTS.pollMs, MIN_POLL_MS),
+    windowMs: num(o.windowMs ?? e.OPENCODE_TPS_METER_WINDOW_MS, DEFAULTS.windowMs, MIN_WINDOW_MS),
+    gapMs: num(o.gapMs ?? e.OPENCODE_TPS_METER_GAP_MS, DEFAULTS.gapMs, MIN_GAP_MS),
+    seriesLength: Math.floor(num(o.seriesLength ?? e.OPENCODE_TPS_METER_SERIES_LENGTH, DEFAULTS.seriesLength, MIN_SERIES_LENGTH)),
     metric,
     detail,
     icon: typeof o.icon === "string" ? o.icon : DEFAULTS.icon,
     label: typeof o.label === "string" ? o.label : DEFAULTS.label,
     unit: typeof o.unit === "string" ? o.unit : DEFAULTS.unit,
-    sparkWidth: Math.floor(num(o.sparkWidth, DEFAULTS.sparkWidth, 0)),
-    showSparkline: o.showSparkline !== false,
-    showSession: o.showSession !== false,
-    showWaits: o.showWaits !== false,
-    showTotals: o.showTotals === true,
-    showCost: o.showCost === true,
-    showCache: o.showCache === true,
+    sparkWidth: Math.floor(num(o.sparkWidth ?? e.OPENCODE_TPS_METER_SPARK_WIDTH, DEFAULTS.sparkWidth, MIN_SPARK_WIDTH)),
+    showSparkline: bool(o.showSparkline, e.OPENCODE_TPS_METER_SHOW_SPARKLINE, DEFAULTS.showSparkline),
+    showSession: bool(o.showSession, e.OPENCODE_TPS_METER_SHOW_SESSION, DEFAULTS.showSession),
+    showWaits: bool(o.showWaits, e.OPENCODE_TPS_METER_SHOW_WAITS, DEFAULTS.showWaits),
+    showTotals: bool(o.showTotals, e.OPENCODE_TPS_METER_SHOW_TOTALS, DEFAULTS.showTotals),
+    showCost: bool(o.showCost, e.OPENCODE_TPS_METER_SHOW_COST, DEFAULTS.showCost),
+    showCache: bool(o.showCache, e.OPENCODE_TPS_METER_SHOW_CACHE, DEFAULTS.showCache),
     colors: o.colors && typeof o.colors === "object" ? o.colors : null,
   };
+}
+
+function bool(option, envValue, fallback) {
+  if (option !== undefined) return !isFalsy(option);
+  if (envValue !== undefined) return !isFalsy(envValue);
+  return fallback;
 }

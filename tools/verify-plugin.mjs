@@ -66,8 +66,13 @@ assert(
 );
 
 // The slot renderer must no-op (return undefined) when there's no session id.
-const empty = registered.slots.sidebar_content({}, {});
-assert(empty === undefined, "sidebar_content returns undefined without a session_id");
+try {
+  const empty = registered.slots.sidebar_content({}, {});
+  assert(empty === undefined, "sidebar_content returns undefined without a session_id");
+} catch (err) {
+  console.error("✗ sidebar_content threw for an empty session:", err);
+  process.exit(1);
+}
 
 // Build the component for a real session. We have no live terminal renderer in a
 // headless harness, so opentui's intrinsic <box>/<text> creation legitimately
@@ -79,7 +84,7 @@ try {
   console.log("✓ sidebar_content built a component for a session");
 } catch (err) {
   const msg = String(err?.message || err);
-  if (/renderer/i.test(msg)) {
+  if (msg.includes("No renderer found")) {
     console.log("✓ sidebar_content ran to JSX construction (no live renderer in headless harness — expected)");
   } else {
     console.error("✗ sidebar_content threw an unexpected error for a real session:", err);

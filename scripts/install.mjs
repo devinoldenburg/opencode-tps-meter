@@ -31,7 +31,18 @@ import { execFileSync } from "node:child_process";
 // unscoped name `opencode-tps-meter` is already owned on npm by a different
 // author. OpenCode resolves the TUI plugin by THIS name from node_modules.
 const PKG_NAME = "@devinoldenburg/opencode-tps-meter";
+const PLUGIN_SPEC = `${PKG_NAME}/tui`;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const HELP = `install.mjs — wire opencode-tps-meter into an OpenCode config so the TUI loads it on next launch.
+
+Usage:
+  node scripts/install.mjs              # add to ~/.config/opencode (npm spec)
+  node scripts/install.mjs --local      # link THIS checkout (file: dependency)
+  node scripts/install.mjs --dir <path> # target a specific config dir
+  node scripts/install.mjs --no-install # edit config only, skip npm install
+  node scripts/install.mjs --dry-run    # print what would change, write nothing
+  node scripts/install.mjs --uninstall  # remove plugin and dependency
+  node scripts/install.mjs --print      # print manual instructions and exit`;
 
 function parseArgs(argv) {
   const a = { _: [] };
@@ -42,7 +53,11 @@ function parseArgs(argv) {
     else if (t === "--dry-run") a.dryRun = true;
     else if (t === "--uninstall" || t === "--remove") a.uninstall = true;
     else if (t === "--print") a.print = true;
-    else if (t === "--dir") a.dir = argv[++i];
+    else if (t === "--dir") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) throw new Error("--dir requires a path argument");
+      a.dir = argv[++i];
+    }
     else if (t === "--help" || t === "-h") a.help = true;
     else a._.push(t);
   }
@@ -64,10 +79,13 @@ function configDir(args) {
 }
 
 function readJson(file, fallback) {
+  if (!existsSync(file)) {
+    return fallback;
+  }
   try {
     return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return fallback;
+  } catch (err) {
+    throw new Error(`Cannot read valid JSON from ${file}: ${err?.message || err}`);
   }
 }
 
@@ -85,7 +103,7 @@ function writeJson(file, obj, dryRun) {
   }
   if (existsSync(file)) {
     try {
-      copyFileSync(file, `${file}.bak`);
+      copyFileSync(file, backupPath(file));
     } catch {
       /* best-effort backup */
     }
@@ -93,11 +111,27 @@ function writeJson(file, obj, dryRun) {
   writeFileSync(file, text);
 }
 
+function backupPath(file) {
+  let n = 0;
+  let candidate = `${file}.bak`;
+  while (existsSync(candidate)) candidate = `${file}.bak.${++n}`;
+  return candidate;
+}
+
+function pluginName(entry) {
+  return Array.isArray(entry) ? entry[0] : entry;
+}
+
+function isPluginEntry(entry) {
+  const name = pluginName(entry);
+  return name === PKG_NAME || name === PLUGIN_SPEC;
+}
+
 function printManual() {
   console.log(`${C.bold("Manual install")} — add to your OpenCode config dir (e.g. ~/.config/opencode):
 
   ${C.cyan("tui.json")}
-    { "$schema": "https://opencode.ai/tui.json", "plugin": ["${PKG_NAME}"] }
+    { "$schema": "https://opencode.ai/tui.json", "plugin": ["${PLUGIN_SPEC}"] }
 
   ${C.cyan("package.json")} (so the TUI can resolve it from node_modules)
     { "dependencies": { "${PKG_NAME}": "latest" } }
@@ -108,7 +142,7 @@ function printManual() {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(2, 26).join("\n").replace(/^ \*\/?/gm, ""));
+    console.log(HELP);
     return;
   }
   if (args.print) return printManual();
@@ -128,26 +162,34 @@ function main() {
   // ── tui.json: the plugin list the TUI reads ────────────────────────────────
   const tui = readJson(tuiPath, { $schema: "https://opencode.ai/tui.json" });
   if (!Array.isArray(tui.plugin)) tui.plugin = [];
-  const had = tui.plugin.includes(PKG_NAME);
+  const existingEntry = tui.plugin.find(isPluginEntry);
+  const had = !!existingEntry;
 
   if (args.uninstall) {
     if (!had) {
       console.log(C.yellow(`  ${PKG_NAME} is not in tui.json — nothing to remove.`));
       return;
     }
-    tui.plugin = tui.plugin.filter((p) => p !== PKG_NAME);
+    tui.plugin = tui.plugin.filter((p) => !isPluginEntry(p));
     writeJson(tuiPath, tui, args.dryRun);
-    console.log(C.green(`  ✓ removed ${PKG_NAME} from tui.json`));
-    console.log(C.dim(`  (left package.json + node_modules untouched)`));
+    const pkg = readJson(pkgPath, {});
+    if (pkg.dependencies && Object.hasOwn(pkg.dependencies, PKG_NAME)) {
+      delete pkg.dependencies[PKG_NAME];
+      writeJson(pkgPath, pkg, args.dryRun);
+    }
+    console.log(C.green(`  ✓ removed ${PKG_NAME} from tui.json and package.json`));
     return;
   }
 
-  if (!had) {
-    tui.plugin.push(PKG_NAME);
+  const normalizedEntry = Array.isArray(existingEntry) ? [PLUGIN_SPEC, ...existingEntry.slice(1)] : PLUGIN_SPEC;
+  const alreadyCurrent = tui.plugin.some((p) => pluginName(p) === PLUGIN_SPEC);
+  if (!had || !alreadyCurrent || tui.plugin.some((p) => pluginName(p) === PKG_NAME)) {
+    tui.plugin = tui.plugin.filter((p) => !isPluginEntry(p));
+    tui.plugin.push(had ? normalizedEntry : PLUGIN_SPEC);
     writeJson(tuiPath, tui, args.dryRun);
-    console.log(C.green(`  ✓ added ${PKG_NAME} to tui.json`));
+    console.log(C.green(`  ✓ ${had ? "updated" : "added"} ${PLUGIN_SPEC} in tui.json`));
   } else {
-    console.log(C.dim(`  • tui.json already lists ${PKG_NAME}`));
+    console.log(C.dim(`  • tui.json already lists ${PLUGIN_SPEC}`));
   }
 
   // ── package.json: how node resolves the package from node_modules ───────────
@@ -174,6 +216,8 @@ function main() {
     } catch (err) {
       console.log(C.yellow(`  ! npm install failed: ${err?.message || err}`));
       console.log(C.dim(`    finish manually: cd ${dir} && npm install`));
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -191,4 +235,9 @@ function npmSpec() {
   }
 }
 
-main();
+try {
+  main();
+} catch (err) {
+  console.error(C.yellow(`  ! ${err?.message || err}`));
+  process.exit(1);
+}

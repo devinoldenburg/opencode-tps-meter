@@ -25,13 +25,13 @@
 
 /** Default characters-per-token before any calibration (English-ish average). */
 export const DEFAULT_CHARS_PER_TOKEN = 4;
-const MIN_RATIO = 1.2;
+const MIN_RATIO = 0.25;
 const MAX_RATIO = 12;
 
 /** Coerce to a finite number, else 0. */
 function n0(v) {
   const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /** Coerce to a finite number, else null (used for optional timestamps). */
@@ -223,6 +223,7 @@ export function aggregate(statList) {
     avgE2eTps: rate(output, e2eMs),
     peakTps: peakTps || null,
     avgTtftMs: ttftCount ? ttftSum / ttftCount : null,
+    decodeSource: [...new Set((statList || []).filter((s) => s && s.done).map((s) => s.decodeSource))].length > 1 ? "mixed" : (statList || []).find((s) => s && s.done)?.decodeSource ?? null,
   };
 }
 
@@ -246,6 +247,9 @@ export function calibrateRatio(prev, chars, tokens, alpha = 0.3) {
   const sample = clampRatio(c / t);
   if (base === null) return sample;
   const a = Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 0.3;
+  if (a === 0 && sample !== base && typeof process !== "undefined" && process.emitWarning) {
+    process.emitWarning("calibrateRatio alpha=0 ignores a valid calibration sample", { code: "OPENCODE_TPS_ALPHA_ZERO" });
+  }
   return clampRatio(base * (1 - a) + sample * a);
 }
 

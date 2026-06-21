@@ -54,6 +54,21 @@ test("streaming surfaces excluded wait time when a tool gap occurred", () => {
   assert.ok(lines.some((l) => l.includes("−5s wait")), `expected an excluded-wait note in ${JSON.stringify(lines)}`);
 });
 
+test("empty detail segments are filtered out", () => {
+  const last = messageStats({ ...LAST_MSG, time: { created: 1000, completed: 3500 } });
+  const v = buildView({ last, session: aggregate([last]), status: "idle" });
+  assert.equal(v.lines.find((l) => l.key === "last").segments.some((s) => s.text === ""), false);
+});
+
+test("streaming with history shows both live and last details", () => {
+  const last = messageStats(LAST_MSG, 1420);
+  const live = { tps: 80, active: true, peak: 90, series: [80], gaps: 0, idleMs: 0 };
+  const v = buildView({ live, last, session: aggregate([last]), status: "busy" });
+  const keys = v.lines.map((l) => l.key);
+  assert.ok(keys.includes("last"));
+  assert.ok(keys.includes("live-detail"));
+});
+
 test("live headline segment is toned 'accent', idle is 'value'", () => {
   const live = { tps: 80, active: true, peak: 80, series: [80], gaps: 0, idleMs: 0 };
   const liveView = buildView({ live, status: "busy" });
