@@ -34,6 +34,7 @@ test("env can disable and override", () => {
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_DISABLE: "1" }).enabled, false);
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_DISABLE: "yes" }).enabled, false);
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER: "off" }).enabled, false);
+  assert.equal(resolveConfig({}, { OPENCODE_TPS_METER: "" }).enabled, false);
   assert.equal(resolveConfig({ enabled: true }, { OPENCODE_TPS_METER_DISABLE: "1" }).enabled, true);
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_METRIC: "generated" }).metric, "generated");
   assert.equal(resolveConfig({}, { OPENCODE_TPS_METER_SLOT: "sidebar_footer" }).slot, "sidebar_footer");

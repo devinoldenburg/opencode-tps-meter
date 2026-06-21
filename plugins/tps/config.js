@@ -48,7 +48,7 @@ const MIN_SERIES_LENGTH = 1;
 const MIN_SPARK_WIDTH = 0;
 
 export function isFalsy(v) {
-  return v === false || v === 0 || v === "0" || v === "false" || v === "off" || v === "no";
+  return v === false || v === 0 || v === "" || v === "0" || v === "false" || v === "off" || v === "no";
 }
 
 function isTruthy(v) {
