@@ -3,9 +3,10 @@
   "version": "0.1.1",
   "description": "A precise tokens-per-second (TPS) meter for the OpenCode TUI sidebar — live throughput, time-to-first-token, and per-session averages, measured from the OpenCode event stream.",
   "type": "module",
-  "main": "plugins/tps-meter.tsx",
+  "main": "plugins/tps/index.js",
+  "types": "plugins/tps/index.d.ts",
   "exports": {
-    ".": "./plugins/tps-meter.tsx",
+    ".": "./plugins/tps/index.js",
     "./tui": "./plugins/tps-meter.tsx",
     "./core": "./plugins/tps/index.js",
     "./package.json": "./package.json"
@@ -71,12 +72,16 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.17.6"
+    "@opencode-ai/plugin": "1.17.6",
+    "@opentui/solid": "0.4.1",
+    "@types/node": "^24.0.3",
+    "solid-js": "1.9.12",
+    "typescript": "^5.9.2"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.15.0",
-    "@opentui/solid": "*",
-    "solid-js": "*"
+    "@opentui/solid": ">=0.4.1 <1",
+    "solid-js": ">=1.9.12 <2"
   },
   "peerDependenciesMeta": {
     "@opencode-ai/plugin": {

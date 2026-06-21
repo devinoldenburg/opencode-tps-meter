@@ -52,6 +52,7 @@ export class RateMeter {
     this._ewma = null;
     this._peak = 0;
     this._series = [];
+    this._head = 0;
   }
 
   /**
@@ -63,16 +64,21 @@ export class RateMeter {
     const tok = Number(tokens);
     const at = Number(t);
     if (!Number.isFinite(at)) return this;
-    if (!Number.isFinite(tok) || tok <= 0) return this;
+    if (this._lastAt !== null && at < this._lastAt) return this;
+    if (!Number.isFinite(tok) || tok <= 0) {
+      this._lastAt = at;
+      return this;
+    }
     if (this._startedAt === null) this._startedAt = at;
     // Continuous-time EWMA of the instantaneous gap rate.
     if (this._prevAt !== null && at > this._prevAt) {
       const dt = at - this._prevAt;
       const inst = tok / (dt / 1000);
-      const alpha = 1 - Math.exp((-dt / this.halfLifeMs) * LN2);
-      this._ewma = this._ewma === null ? inst : this._ewma + alpha * (inst - this._ewma);
-    } else if (this._ewma === null) {
-      this._ewma = 0; // first sample: no gap yet, seed at 0 so it ramps up
+      if (this._ewma === null) this._ewma = inst;
+      else {
+        const alpha = 1 - Math.exp((-dt / this.halfLifeMs) * LN2);
+        this._ewma = this._ewma + alpha * (inst - this._ewma);
+      }
     }
     this._samples.push({ t: at, tok });
     this._windowSum += tok;
@@ -88,13 +94,16 @@ export class RateMeter {
   _prune(now) {
     const left = now - this.windowMs;
     const s = this._samples;
-    let i = 0;
-    while (i < s.length && s[i].t <= left) {
-      this._windowSum -= s[i].tok;
-      i++;
+    while (this._head < s.length && s[this._head].t <= left) {
+      this._windowSum -= s[this._head].tok;
+      this._head++;
     }
-    if (i > 0) s.splice(0, i);
-    if (this._windowSum < 0) this._windowSum = 0; // guard fp drift
+    if (this._head > 64 && this._head * 2 > s.length) {
+      s.splice(0, this._head);
+      this._head = 0;
+    }
+    if (this._windowSum < -1e-9) throw new Error("RateMeter window sum invariant violated");
+    if (this._windowSum < 0) this._windowSum = 0; // tolerate tiny fp drift
   }
 
   /**
@@ -107,7 +116,8 @@ export class RateMeter {
     this._prune(at);
     if (this._windowSum <= 0) return 0;
     const left = Math.max(at - this.windowMs, this._startedAt);
-    const span = Math.max(at - left, this.minSpanMs);
+    const rawSpan = at - left;
+    const span = this._samples.length - this._head > 1 ? Math.max(rawSpan, 1) : Math.max(rawSpan, this.minSpanMs);
     return this._windowSum / (span / 1000);
   }
 
@@ -144,7 +154,7 @@ export class RateMeter {
     if (this._lastAt === null) return false;
     const at = Number(now);
     if (!Number.isFinite(at)) return false;
-    return at - this._lastAt <= this.windowMs;
+    return at - this._lastAt < this.windowMs;
   }
 
   series() {

@@ -17,7 +17,7 @@
 
 import { RateMeter } from "../plugins/tps/meter.js";
 import { GenerationTimer } from "../plugins/tps/gen.js";
-import { messageStats, aggregate, tokensFromChars } from "../plugins/tps/tps.js";
+import { messageStats, aggregate } from "../plugins/tps/tps.js";
 import { buildView, renderText } from "../plugins/tps/view.js";
 
 const args = parseArgs(process.argv.slice(2));
@@ -131,7 +131,7 @@ async function animate() {
       const now = Date.now() - start;
       while (fed < schedule.chunks.length && schedule.chunks[fed].t <= now) {
         const c = schedule.chunks[fed++];
-        const tok = tokensFromChars(c.chars, RATIO);
+        const tok = c.tokens;
         timer.push(tok, c.t);
         meter.push(tok, c.t);
       }
@@ -159,7 +159,7 @@ function runCi() {
   const schedule = buildSchedule();
   const meter = new RateMeter({ windowMs: 3000, seriesLength: 28 });
   const timer = new GenerationTimer();
-  const toolStart = schedule.chunks.find((_, i) => i > 0 && schedule.chunks[i].t - schedule.chunks[i - 1].t > 1000);
+  const toolStart = schedule.chunks.find((_, i) => i > 0 && schedule.chunks[i].t - schedule.chunks[i - 1].t >= TOOL_GAP);
   const stops = [
     { label: "warmup", at: TTFT_MS + 500 },
     { label: "during tool call", at: (toolStart ? toolStart.t : schedule.completedAt) - 200 },
@@ -172,7 +172,7 @@ function runCi() {
   for (let now = 0; now <= schedule.completedAt + 2000; now += POLL_MS) {
     while (fed < schedule.chunks.length && schedule.chunks[fed].t <= now) {
       const c = schedule.chunks[fed++];
-      const tok = tokensFromChars(c.chars, RATIO);
+      const tok = c.tokens;
       timer.push(tok, c.t);
       meter.push(tok, c.t);
     }
@@ -186,7 +186,7 @@ function runCi() {
   for (const f of frames) {
     console.log(`${ANSI.muted}── ${f.label} ──${ANSI.reset}`);
     console.log(colorize(f.view));
-    if (!renderText(f.view).includes("TPS")) throw new Error(`demo frame "${f.label}" missing TPS header`);
+    if (!renderText(f.view).split("\n")[0]?.startsWith("TPS")) throw new Error(`demo frame "${f.label}" missing TPS header`);
     console.log();
   }
   console.log(`${ANSI.muted}(headline TPS holds across the tool call; the sparkline dips. Animate: run in a TTY without --ci)${ANSI.reset}`);
@@ -213,6 +213,7 @@ try {
   if (CI) runCi();
   else await animate();
 } catch (err) {
+  process.stdout.write("\x1b[?25h");
   console.error("demo failed:", err);
   process.exit(1);
 }

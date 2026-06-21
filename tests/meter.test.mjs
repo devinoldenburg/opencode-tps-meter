@@ -30,12 +30,11 @@ test("steady stream converges to the true rate", () => {
   assert.equal(m.rate(3000), 100);
 });
 
-test("minSpan guard caps an early burst instead of reporting infinity", () => {
+test("multiple deltas use their actual span for peak precision", () => {
   const m = new RateMeter({ windowMs: 3000, minSpanMs: 250 });
   m.push(100, 0);
   m.push(100, 10);
-  // real span is 10ms; guard floors it at 250ms -> 200 / 0.25 = 800 (not 20000)
-  assert.equal(m.rate(10), 800);
+  assert.equal(m.rate(10), 20000);
 });
 
 test("windowed rate decays monotonically when the stream stops", () => {
@@ -53,8 +52,28 @@ test("active() tracks the trailing window boundary", () => {
   const m = new RateMeter({ windowMs: 3000 });
   m.push(10, 1000);
   assert.equal(m.active(1000), true);
-  assert.equal(m.active(4000), true); // exactly windowMs later, inclusive
+  assert.equal(m.active(4000), false); // exactly windowMs later is outside the window
   assert.equal(m.active(4001), false);
+});
+
+test("smooth() seeds from the first measurable instantaneous rate", () => {
+  const m = new RateMeter({ halfLifeMs: 900 });
+  m.push(100, 0);
+  m.push(100, 100);
+  assert.equal(m.smooth(100), 1000);
+});
+
+test("ignored zero deltas still refresh active state", () => {
+  const m = new RateMeter({ windowMs: 3000 });
+  m.push(10, 0);
+  m.push(0, 2500);
+  assert.equal(m.active(3000), true);
+});
+
+test("non-monotonic deltas are ignored", () => {
+  const m = new RateMeter();
+  m.push(10, 1000).push(10, 900).push(10, 1100);
+  assert.equal(m.total, 20);
 });
 
 test("sample() builds a capped series and tracks the peak", () => {

@@ -44,32 +44,37 @@ import { buildView } from "./tps/view.js";
 import { resolveConfig, TONE_TO_THEME } from "./tps/config.js";
 
 const id = "opencode-tps-meter";
+type AnyRecord = Record<string, any>;
 
 /**
  * The per-session sidebar view. One instance is mounted per session slot; it owns
  * a RateMeter and the calibration state for that session and tears them down on
  * cleanup.
  */
-function TpsView(props) {
-  const cfg = props.cfg;
+function TpsView(props: AnyRecord) {
+  const cfg = props.cfg as AnyRecord;
   const theme = () => props.api.theme.current;
-  const toneColor = (tone) => {
+  const toneColor = (tone: string) => {
     const override = cfg.colors && cfg.colors[tone];
     if (override) return override;
     const t = theme() || {};
-    return t[TONE_TO_THEME[tone] || "text"] || t.text;
+    const themeKey = (TONE_TO_THEME as Record<string, string>)[tone] || "text";
+    return t[themeKey] || t.text;
   };
 
   // The sparkline uses a windowed instantaneous rate (visual texture). The PRECISE
   // numbers come from per-message GenerationTimers, which measure active-generation
   // time only — excluding tool calls, permission waits, and stalls inside a turn.
   const meter = new RateMeter({ windowMs: cfg.windowMs, seriesLength: cfg.seriesLength });
-  const timers = new Map(); // messageID -> GenerationTimer (active-gen time, gap-excluded)
-  const partLen = new Map(); // partID -> last observed text length
-  let ratio = DEFAULT_CHARS_PER_TOKEN; // chars/token, self-calibrated per model
-  let currentMsgId = null; // message currently streaming (for the live headline)
+  const timers = new Map<string, GenerationTimer>(); // messageID -> active-gen timer
+  const partLen = new Map<string, { length: number; messageID?: string }>();
+  const ratioByModel = new Map<string, number>(); // modelID/providerID -> chars/token calibration
+  let currentMsgId: string | null = null; // most recently observed streaming message
 
-  const timerFor = (messageID) => {
+  const modelKey = (info: AnyRecord | null | undefined) => `${info?.providerID ?? ""}/${info?.modelID ?? ""}`;
+  const ratioFor = (info: AnyRecord | null | undefined) => ratioByModel.get(modelKey(info)) ?? DEFAULT_CHARS_PER_TOKEN;
+
+  const timerFor = (messageID: string) => {
     let t = timers.get(messageID);
     if (!t) {
       t = new GenerationTimer({ gapThresholdMs: cfg.gapMs });
@@ -77,7 +82,7 @@ function TpsView(props) {
     }
     return t;
   };
-  const timingFor = (messageID) => {
+  const timingFor = (messageID: string) => {
     const t = timers.get(messageID);
     return t
       ? { firstTokenAt: t.firstAt, activeMs: t.activeMs, idleMs: t.idleMs, gaps: t.gaps, primeTokens: t.primeTokens }
@@ -86,27 +91,30 @@ function TpsView(props) {
 
   const [tick, setTick] = createSignal(0);
   const bump = () => setTick((x) => (x + 1) % 1_000_000);
+  let timer: ReturnType<typeof setInterval> | null = null;
+  onCleanup(() => {
+    if (timer !== null) clearInterval(timer);
+  });
 
   // ── Precise live deltas + calibration via the event bus ────────────────────
-  const offs = [];
+  const offs: Array<() => void> = [];
   try {
     const bus = props.api.event;
     if (bus && typeof bus.on === "function") {
-      const onPart = (event) => {
+      const onPart = (event: AnyRecord) => {
         try {
           const part = event?.properties?.part;
-          if (!part || part.sessionID !== props.sessionID) return;
+          if (!part || String(part.sessionID) !== String(props.sessionID)) return;
           if (part.type !== "text" && part.type !== "reasoning") return;
           const now = Date.now();
           const full = typeof part.text === "string" ? part.text.length : 0;
           const delta = event?.properties?.delta;
-          const added =
-            typeof delta === "string" && delta.length > 0
-              ? delta.length
-              : Math.max(0, full - (partLen.get(part.id) || 0));
-          partLen.set(part.id, full);
+          const prev = partLen.get(part.id);
+          const added = typeof delta === "string" ? delta.length : prev ? Math.max(0, full - prev.length) : 0;
+          partLen.set(part.id, { length: full, messageID: part.messageID });
           if (added > 0) {
-            const tokens = tokensFromChars(added, ratio);
+            const msg = part.messageID ? safeMessage(part.messageID) : null;
+            const tokens = tokensFromChars(added, ratioFor(msg));
             if (part.messageID) {
               timerFor(part.messageID).push(tokens, now); // precise active-gen time
               currentMsgId = part.messageID;
@@ -118,10 +126,10 @@ function TpsView(props) {
           /* ignore a single malformed event */
         }
       };
-      const onMessage = (event) => {
+      const onMessage = (event: AnyRecord) => {
         try {
           const info = event?.properties?.info;
-          if (info && info.sessionID === props.sessionID && isAssistant(info) && info.time?.completed) {
+          if (info && String(info.sessionID) === String(props.sessionID) && isAssistant(info) && info.time?.completed) {
             const generated = (Number(info.tokens?.output) || 0) + (Number(info.tokens?.reasoning) || 0);
             let chars = 0;
             try {
@@ -133,9 +141,17 @@ function TpsView(props) {
                 partLen.delete(p.id);
               }
             } catch {
-              /* parts unavailable on this build — skip calibration this round */
+              for (const [partID, state] of partLen) {
+                if (state.messageID === info.id) {
+                  chars += state.length;
+                  partLen.delete(partID);
+                }
+              }
             }
-            if (chars > 0 && generated > 0) ratio = calibrateRatio(ratio, chars, generated);
+            if (chars > 0 && generated > 0) {
+              const key = modelKey(info);
+              ratioByModel.set(key, calibrateRatio(ratioByModel.get(key), chars, generated));
+            }
             // Lock this message's timer to the exact generated count; the measured
             // active time is unchanged, so its rate becomes exact.
             const t = timers.get(info.id);
@@ -150,19 +166,22 @@ function TpsView(props) {
       // Keep the per-message timers from accumulating orphans. A timer is needed for
       // as long as its message is in the session (the view recomputes exact stats
       // for all of them), so only drop it when the message is actually removed.
-      const onMessageRemoved = (event) => {
+      const onMessageRemoved = (event: AnyRecord) => {
         try {
           const messageID = event?.properties?.messageID;
           if (messageID) {
             timers.delete(messageID);
             if (currentMsgId === messageID) currentMsgId = null;
+            for (const [partID, state] of partLen) {
+              if (state.messageID === messageID) partLen.delete(partID);
+            }
           }
         } catch {
           /* ignore */
         }
         bump();
       };
-      const onPartRemoved = (event) => {
+      const onPartRemoved = (event: AnyRecord) => {
         try {
           const partID = event?.properties?.partID;
           if (partID) partLen.delete(partID);
@@ -192,7 +211,7 @@ function TpsView(props) {
   }
 
   // ── Live tick: re-sample the windowed rate (sparkline + decay) and repaint ──
-  const timer = setInterval(() => {
+  timer = setInterval(() => {
     try {
       meter.sample(Date.now());
     } catch {
@@ -200,7 +219,6 @@ function TpsView(props) {
     }
     bump();
   }, cfg.pollMs);
-  onCleanup(() => clearInterval(timer));
   onCleanup(() => {
     for (const off of offs) {
       try {
@@ -210,6 +228,15 @@ function TpsView(props) {
       }
     }
   });
+
+  function safeMessage(messageID: string) {
+    try {
+      const messages = props.api.state.session.messages(props.sessionID) || [];
+      return messages.find((m: AnyRecord) => m?.id === messageID) || null;
+    } catch {
+      return null;
+    }
+  }
 
   // ── Derived view model: exact stats from reactive state + the live snapshot ─
   const view = createMemo(() => {
@@ -226,7 +253,7 @@ function TpsView(props) {
     let inflightId = null;
     for (const m of messages) {
       if (!isAssistant(m)) continue;
-      const s = messageStats(m, timingFor(m.id));
+      const s = messageStats(m, timingFor(m.id)) as AnyRecord | null;
       if (!s) continue;
       stats.push(s);
       if (s.done) last = s; // most-recent completed message
@@ -297,15 +324,15 @@ function TpsView(props) {
 }
 
 /** @type {import("@opencode-ai/plugin/tui").TuiPlugin} */
-const tui = async (api, options) => {
+const tui = async (api: AnyRecord, options: AnyRecord) => {
   try {
-    const cfg = resolveConfig(options, typeof process !== "undefined" ? process.env : {});
+    const cfg = resolveConfig(options, typeof process !== "undefined" ? process.env : {}) as AnyRecord;
     if (!cfg.enabled) return;
     if (!api?.slots?.register) return; // runtime without the slot API → no-op
     api.slots.register({
       order: cfg.order,
       slots: {
-        [cfg.slot](_ctx, props) {
+        [cfg.slot](_ctx: AnyRecord, props: AnyRecord) {
           if (!props?.session_id) return undefined;
           return <TpsView api={api} sessionID={props.session_id} cfg={cfg} />;
         },

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: ["**"]
 
 permissions:
   contents: read
@@ -12,11 +12,15 @@ permissions:
 jobs:
   test:
     name: test (node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         node: ["20.11", "20", "22"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - node: "24"
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -26,13 +30,16 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Unit tests
-        run: node --test
+        run: npm test
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
 
       - name: Demo smoke test (deterministic)
         run: node tools/demo.mjs --ci
 
       - name: Pack check
-        run: npm pack --dry-run
+        run: npm run pack:check
 
   verify-plugin:
     name: verify plugin under @opentui/solid (bun)
@@ -43,11 +50,5 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      # solid-js / @opentui/solid are *optional* peerDependencies, which npm won't
-      # install even when asked directly; install-peers.mjs works around that by
-      # installing them in a clean project and copying them into node_modules.
-      - name: Install peer runtime
-        run: node tools/install-peers.mjs
-
       - name: Verify plugin module loads + wires correctly
-        run: bun tools/verify-plugin.mjs
+        run: npm run verify:plugin

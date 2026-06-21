@@ -19,7 +19,7 @@ export function fmtRate(value, placeholder = "–") {
   if (value === null || value === undefined) return placeholder; // unknown, not zero
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return placeholder;
-  if (n >= 1000) return trimZero((n / 1000).toFixed(1)) + "k";
+  if (n >= 999.5) return trimZero((n / 1000).toFixed(1)) + "k";
   if (n >= 100) return String(Math.round(n));
   if (n >= 10) return trimZero(n.toFixed(1));
   return trimZero(n.toFixed(1));
@@ -35,7 +35,7 @@ export function fmtInt(value) {
 /** Token counts: <1000 plain, else "k"/"M" with one decimal. */
 export function fmtTokens(value) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "0";
+  if (!Number.isFinite(n) || n < 0) return "0";
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return trimZero((n / 1_000_000).toFixed(1)) + "M";
   if (abs >= 1000) return trimZero((n / 1000).toFixed(1)) + "k";
@@ -49,15 +49,16 @@ export function fmtMs(value) {
   if (n < 1000) return `${Math.round(n)}ms`;
   const s = n / 1000;
   if (s < 60) return `${trimZero(s.toFixed(s < 10 ? 1 : 0))}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.round(s - m * 60);
+  const rounded = Math.round(s);
+  const m = Math.floor(rounded / 60);
+  const rem = rounded % 60;
   return `${m}m${String(rem).padStart(2, "0")}s`;
 }
 
 /** Cost in USD: "$0.0123" small, "$1.23" larger, "$0" for zero. */
 export function fmtCost(value) {
   const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return "$0";
+  if (!Number.isFinite(n) || n <= 0) return "$0";
   if (n < 0.01) return "$" + n.toFixed(4);
   if (n < 1) return "$" + n.toFixed(3);
   return "$" + n.toFixed(2);
@@ -90,7 +91,8 @@ export function sparkline(values, opts = {}) {
   else pad = width - arr.length;
 
   const min = Number.isFinite(Number(opts.min)) ? Number(opts.min) : 0;
-  const max = Number.isFinite(Number(opts.max)) ? Number(opts.max) : Math.max(min, ...cells, 0);
+  const rawMax = Number.isFinite(Number(opts.max)) ? Number(opts.max) : Math.max(min, ...cells, 0);
+  const max = Math.max(min, rawMax);
   const range = max - min;
 
   const body = cells

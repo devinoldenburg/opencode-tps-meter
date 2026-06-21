@@ -12,17 +12,18 @@
  * Dev/CI only — never shipped (the package `files` allowlist excludes tools/).
  */
 
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, existsSync, rmSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
-const PEERS = ["solid-js", "@opentui/solid"];
+const PEERS = ["solid-js@1.9.12", "@opentui/solid@0.4.1"];
+const PEER_DIRS = ["solid-js", "@opentui/solid"];
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dest = join(REPO, "node_modules");
 
-const already = PEERS.every((p) => existsSync(join(dest, ...p.split("/"))));
+const already = PEER_DIRS.every((p) => existsSync(join(dest, ...p.split("/"))));
 if (already && !process.argv.includes("--force")) {
   console.log("✓ peer runtime already present in node_modules (pass --force to reinstall)");
   process.exit(0);
@@ -32,14 +33,21 @@ const tmp = mkdtempSync(join(tmpdir(), "tps-peers-"));
 writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "tps-peers", private: true }) + "\n");
 
 console.log(`• installing ${PEERS.join(" ")} in a clean project (${tmp}) …`);
-execFileSync("npm", ["install", "--no-audit", "--no-fund", ...PEERS], { cwd: tmp, stdio: "inherit" });
+try {
+  execFileSync("npm", ["install", "--no-audit", "--no-fund", "--save-exact", ...PEERS], { cwd: tmp, stdio: "inherit" });
 
-mkdirSync(dest, { recursive: true });
-cpSync(join(tmp, "node_modules"), dest, { recursive: true });
+  mkdirSync(dest, { recursive: true });
+  for (const p of PEER_DIRS) {
+    mkdirSync(dirname(join(dest, ...p.split("/"))), { recursive: true });
+    cpSync(join(tmp, "node_modules", ...p.split("/")), join(dest, ...p.split("/")), { recursive: true, force: true });
+  }
 
-const ok = PEERS.every((p) => existsSync(join(dest, ...p.split("/"))));
-if (!ok) {
-  console.error("✗ peer runtime did not land in node_modules");
-  process.exit(1);
+  const ok = PEER_DIRS.every((p) => existsSync(join(dest, ...p.split("/"))));
+  if (!ok) {
+    console.error("✗ peer runtime did not land in node_modules");
+    process.exit(1);
+  }
+  console.log(`✓ peer runtime copied into ${dest}`);
+} finally {
+  rmSync(tmp, { recursive: true, force: true });
 }
-console.log(`✓ peer runtime copied into ${dest}`);

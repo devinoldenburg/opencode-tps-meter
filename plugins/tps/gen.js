@@ -56,6 +56,7 @@ export class GenerationTimer {
     this._gaps = 0; // count of excluded gaps
     this._firstAt = null; // first chunk arrival (for TTFT)
     this._lastAt = null; // most recent chunk arrival
+    this._pendingPrime = false; // tokenless burst opener; next token inherits prime
   }
 
   /**
@@ -70,6 +71,7 @@ export class GenerationTimer {
     const at = Number(t);
     const tok = Number(tokens);
     if (!Number.isFinite(at)) return this;
+    if (this._lastAt !== null && at < this._lastAt) return this;
     let prime = false;
     if (this._lastAt === null) {
       prime = true; // very first chunk → prefill window
@@ -84,10 +86,14 @@ export class GenerationTimer {
         }
       }
     }
+    if (this._pendingPrime) prime = true;
     if (this._firstAt === null) this._firstAt = at;
     if (Number.isFinite(tok) && tok > 0) {
       this._tokens += tok;
       if (prime) this._primeTokens += tok;
+      this._pendingPrime = false;
+    } else if (prime) {
+      this._pendingPrime = true;
     }
     this._lastAt = at;
     return this;
@@ -101,7 +107,11 @@ export class GenerationTimer {
    */
   setTokens(exact) {
     const n = Number(exact);
-    if (Number.isFinite(n) && n >= 0) this._tokens = n;
+    if (Number.isFinite(n) && n >= 0) {
+      const ratio = this._tokens > 0 ? this._primeTokens / this._tokens : 0;
+      this._tokens = n;
+      this._primeTokens = Math.min(n, n * ratio);
+    }
     return this;
   }
 
