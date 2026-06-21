@@ -3,9 +3,8 @@ node_modules/
 .pnp
 .pnp.js
 
-# Lockfiles are intentionally not committed (library convention; CI/tests run
-# without an install). Generated locally by `npm install`.
-package-lock.json
+# npm-shrinkwrap is for published application locks; this package commits
+# package-lock.json for reproducible development and CI installs.
 npm-shrinkwrap.json
 
 # Build / cache

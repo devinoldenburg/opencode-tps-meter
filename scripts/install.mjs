@@ -31,6 +31,7 @@ import { execFileSync } from "node:child_process";
 // unscoped name `opencode-tps-meter` is already owned on npm by a different
 // author. OpenCode resolves the TUI plugin by THIS name from node_modules.
 const PKG_NAME = "@devinoldenburg/opencode-tps-meter";
+const PLUGIN_SPEC = `${PKG_NAME}/tui`;
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const HELP = `install.mjs — wire opencode-tps-meter into an OpenCode config so the TUI loads it on next launch.
 
@@ -121,11 +122,16 @@ function pluginName(entry) {
   return Array.isArray(entry) ? entry[0] : entry;
 }
 
+function isPluginEntry(entry) {
+  const name = pluginName(entry);
+  return name === PKG_NAME || name === PLUGIN_SPEC;
+}
+
 function printManual() {
   console.log(`${C.bold("Manual install")} — add to your OpenCode config dir (e.g. ~/.config/opencode):
 
   ${C.cyan("tui.json")}
-    { "$schema": "https://opencode.ai/tui.json", "plugin": ["${PKG_NAME}"] }
+    { "$schema": "https://opencode.ai/tui.json", "plugin": ["${PLUGIN_SPEC}"] }
 
   ${C.cyan("package.json")} (so the TUI can resolve it from node_modules)
     { "dependencies": { "${PKG_NAME}": "latest" } }
@@ -156,14 +162,14 @@ function main() {
   // ── tui.json: the plugin list the TUI reads ────────────────────────────────
   const tui = readJson(tuiPath, { $schema: "https://opencode.ai/tui.json" });
   if (!Array.isArray(tui.plugin)) tui.plugin = [];
-  const had = tui.plugin.some((p) => pluginName(p) === PKG_NAME);
+  const had = tui.plugin.some(isPluginEntry);
 
   if (args.uninstall) {
     if (!had) {
       console.log(C.yellow(`  ${PKG_NAME} is not in tui.json — nothing to remove.`));
       return;
     }
-    tui.plugin = tui.plugin.filter((p) => pluginName(p) !== PKG_NAME);
+    tui.plugin = tui.plugin.filter((p) => !isPluginEntry(p));
     writeJson(tuiPath, tui, args.dryRun);
     const pkg = readJson(pkgPath, {});
     if (pkg.dependencies && Object.hasOwn(pkg.dependencies, PKG_NAME)) {
@@ -175,11 +181,11 @@ function main() {
   }
 
   if (!had) {
-    tui.plugin.push(PKG_NAME);
+    tui.plugin.push(PLUGIN_SPEC);
     writeJson(tuiPath, tui, args.dryRun);
-    console.log(C.green(`  ✓ added ${PKG_NAME} to tui.json`));
+    console.log(C.green(`  ✓ added ${PLUGIN_SPEC} to tui.json`));
   } else {
-    console.log(C.dim(`  • tui.json already lists ${PKG_NAME}`));
+    console.log(C.dim(`  • tui.json already lists ${PLUGIN_SPEC}`));
   }
 
   // ── package.json: how node resolves the package from node_modules ───────────

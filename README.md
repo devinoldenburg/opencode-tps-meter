@@ -94,7 +94,7 @@ Add it to your OpenCode config dir (e.g. `~/.config/opencode`):
 
 ```jsonc
 // tui.json
-{ "$schema": "https://opencode.ai/tui.json", "plugin": ["@devinoldenburg/opencode-tps-meter"] }
+{ "$schema": "https://opencode.ai/tui.json", "plugin": ["@devinoldenburg/opencode-tps-meter/tui"] }
 ```
 
 ```jsonc
@@ -112,7 +112,7 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 {
   "$schema": "https://opencode.ai/tui.json",
   "plugin": [
-    ["@devinoldenburg/opencode-tps-meter", { "metric": "output", "gapMs": 1000, "detail": "compact" }]
+    ["@devinoldenburg/opencode-tps-meter/tui", { "metric": "output", "gapMs": 1000, "detail": "compact" }]
   ]
 }
 ```
