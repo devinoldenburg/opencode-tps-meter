@@ -78,10 +78,13 @@ function configDir(args) {
 }
 
 function readJson(file, fallback) {
+  if (!existsSync(file)) {
+    return fallback;
+  }
   try {
     return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return fallback;
+  } catch (err) {
+    throw new Error(`Cannot read valid JSON from ${file}: ${err?.message || err}`);
   }
 }
 
