@@ -75,10 +75,7 @@ test("END-TO-END: rendered sidebar shows the true generation rate, excludes the 
   // Rendered sidebar: throughput + TTFT + excluded wait, and nothing OpenCode
   // already shows natively (no token totals, no cost).
   const v = buildView({ live: null, last, session, status: "idle" });
-  assert.equal(
-    renderText(v),
-    ["TPS  200 tok/s", "last 200 tok/s  ttft 500ms · −4s wait", "avg  200 tok/s  peak 200"].join("\n"),
-  );
+  assert.equal(renderText(v), ["TPS  200 tok/s", "ttft 500ms · −4s wait"].join("\n"));
   const text = renderText(v);
   assert.ok(!text.includes("$"), "no cost (native Context shows it)");
   assert.ok(!/\bmsg\b/.test(text), "no message-count totals by default");
@@ -109,7 +106,6 @@ test("END-TO-END: a clean turn with no tools renders just throughput + TTFT", ()
   });
   assert.ok(Math.abs(last.generatedTps - 200) < 1e-9);
   const v = buildView({ live: null, last, session: aggregate([last]), status: "idle" });
-  // no tool gap -> no "wait" note
   assert.ok(!renderText(v).includes("wait"));
-  assert.ok(renderText(v).startsWith("TPS  200 tok/s\nlast 200 tok/s  ttft 300ms"));
+  assert.equal(renderText(v), "TPS  200 tok/s\nttft 300ms");
 });

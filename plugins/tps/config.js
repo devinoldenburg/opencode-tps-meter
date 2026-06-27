@@ -23,11 +23,11 @@ export const DEFAULTS = {
   gapMs: 1500, // inter-token gap at/above which generation is "paused" (tool/wait) and excluded
   seriesLength: 40, // sparkline history length
   metric: "generated", // "generated" (output+reasoning) | "output"
-  detail: "full", // "full" | "compact" | "minimal"
+  detail: "compact", // "full" | "compact" | "minimal"
   icon: "", // optional prefix glyph; empty = none (clean/professional default)
   label: "TPS",
   unit: "tok/s",
-  sparkWidth: 24,
+  sparkWidth: 18,
   showSparkline: true,
   showSession: true,
   showWaits: true, // surface excluded tool/wait time (precision signal)

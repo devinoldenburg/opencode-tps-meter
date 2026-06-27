@@ -9,20 +9,22 @@
 export const SPARK_CHARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
 /**
- * Format a tokens-per-second value. Compact and stable-width-ish:
- *   <10     → one decimal   (e.g. "8.4")
- *   <1000   → integer       (e.g. "247")
- *   >=1000  → "k" with one decimal (e.g. "1.2k")
+ * Format a tokens-per-second value for display. Precision-first (not rounded away):
+ *   >=10_000 → "k" with two decimals when useful (e.g. "12.35k")
+ *   >=1000   → "k" with two decimals (e.g. "1.23k")
+ *   >=100    → one decimal (e.g. "192.3")
+ *   >=10     → one decimal (e.g. "12.4")
+ *   <10      → two decimals (e.g. "8.42")
  * `null`/non-finite → the placeholder (default "–").
  */
 export function fmtRate(value, placeholder = "–") {
   if (value === null || value === undefined) return placeholder; // unknown, not zero
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return placeholder;
-  if (n >= 999.5) return trimZero((n / 1000).toFixed(1)) + "k";
-  if (n >= 100) return String(Math.round(n));
+  if (n >= 1000) return trimZero((n / 1000).toFixed(2)) + "k";
+  if (n >= 100) return trimZero(n.toFixed(1));
   if (n >= 10) return trimZero(n.toFixed(1));
-  return trimZero(n.toFixed(1));
+  return trimZero(n.toFixed(2));
 }
 
 /** Integer with thousands separators. */

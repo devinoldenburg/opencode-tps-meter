@@ -300,7 +300,7 @@ function TpsView(props: AnyRecord) {
 
   return (
     <Show when={view().state !== "none"}>
-      <box flexDirection="column" paddingTop={1}>
+      <box flexDirection="column" paddingTop={1} gap={0}>
         <For each={view().lines}>
           {(line) => (
             <text>

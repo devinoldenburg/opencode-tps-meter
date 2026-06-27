@@ -8,7 +8,8 @@ test("defaults when given nothing", () => {
   assert.equal(c.order, 150);
   assert.equal(c.slot, "sidebar_content");
   assert.equal(c.metric, "generated");
-  assert.equal(c.detail, "full");
+  assert.equal(c.detail, "compact");
+  assert.equal(c.sparkWidth, 18);
   assert.equal(c.windowMs, 3000);
   assert.equal(c.gapMs, 1500);
   assert.equal(c.pollMs, 250);

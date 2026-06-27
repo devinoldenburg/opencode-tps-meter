@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-27
+
+### Changed
+
+- **Default UI (`detail: compact`).** Sidebar shows a bold headline plus one muted footer
+  (TTFT, excluded wait, peak/avg only when they differ from the headline). No redundant
+  `last`/`avg` rows; sparkline appears while streaming only.
+- **Display precision.** `fmtRate` keeps one decimal from 100 tok/s and two below 10;
+  k-format uses two decimals. Generation math unchanged — only how numbers are shown.
+- **Tighter sparkline** default width 18 (was 24).
+
 ## [0.1.3] — 2026-06-27
 
 ### Fixed

@@ -15,6 +15,8 @@
 import { fmtRate, fmtTokens, fmtMs, fmtCost, sparkline } from "./format.js";
 import { DEFAULTS } from "./config.js";
 
+const HEAD_PAD = "  ";
+
 /**
  * @param {object} input
  * @param {object|null} input.live      Live snapshot `{ tps, active, series, peak, gaps?, idleMs? }` or null.
@@ -31,12 +33,6 @@ export function buildView(input = {}) {
   const session = input.session || null;
   const status = input.status;
 
-  // "Streaming" = the model is producing tokens *right now*. The session status
-  // is authoritative (it flips to "idle" the moment a turn completes), so trust
-  // it when present; the meter's trailing window is only a fallback for runtimes
-  // that don't surface status. This keeps a completed message from showing a
-  // stale live rate while its rate window drains (the headline snaps to the exact
-  // figure instead).
   const streaming =
     status === "busy" ? true : status === "idle" || status === "retry" ? false : !!(live && live.active);
   const hasHistory = !!last || (session && session.count > 0);
@@ -52,24 +48,29 @@ export function buildView(input = {}) {
   const lines = [];
   const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null && s.text !== "") });
 
-  // ── Header + headline number (active-generation TPS) ──────────────────────
   const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
   const headerSegs = [{ text: headerLabel, tone: "header" }];
   if (headline !== null && headline !== undefined) {
-    headerSegs.push({ text: "  ", tone: "muted" });
+    headerSegs.push({ text: HEAD_PAD, tone: "muted" });
     headerSegs.push({ text: fmtRate(headline), tone: streaming ? "accent" : "value" });
     headerSegs.push({ text: ` ${cfg.unit}`, tone: "muted" });
   }
   push("header", headerSegs);
 
-  // ── Sparkline of recent live rates ────────────────────────────────────────
-  if (cfg.showSparkline && live && Array.isArray(live.series) && live.series.length) {
+  const showSpark =
+    cfg.showSparkline && live && Array.isArray(live.series) && live.series.length && (cfg.detail !== "compact" || streaming);
+  if (showSpark) {
     push("spark", [{ text: sparkline(live.series, { width: cfg.sparkWidth }), tone: streaming ? "accent" : "muted" }]);
   }
 
   if (cfg.detail === "minimal") return { state: streaming ? "live" : "idle", lines };
 
-  // ── Last message: exact generation rate, TTFT, and excluded wait ──────────
+  if (cfg.detail === "compact") {
+    pushCompactFooter({ push, cfg, streaming, live, last, session, metricKey, avgKey, headline });
+    return { state: streaming ? "live" : "idle", lines };
+  }
+
+  // ── full detail ───────────────────────────────────────────────────────────
   if (last && last.done) {
     const detail = [];
     if (last.ttftMs !== null && last.ttftMs !== undefined) detail.push(`ttft ${fmtMs(last.ttftMs)}`);
@@ -81,14 +82,12 @@ export function buildView(input = {}) {
     ]);
   }
   if (streaming && live) {
-    // Active message not yet finalized: peak so far + any wait already excluded.
     const bits = [];
     if (live.peak) bits.push(`peak ${fmtRate(live.peak)} ${cfg.unit}`);
     if (cfg.showWaits && live.gaps > 0 && live.idleMs > 0) bits.push(`−${fmtMs(live.idleMs)} wait`);
     if (bits.length) push("live-detail", [{ text: "now  ", tone: "label" }, { text: bits.join(" · "), tone: "muted" }]);
   }
 
-  // ── Session aggregate: throughput only (totals/cost are native) ───────────
   if (cfg.showSession && session && session.count > 0) {
     push("avg", [
       { text: "avg  ", tone: "label" },
@@ -96,7 +95,6 @@ export function buildView(input = {}) {
       { text: session.peakTps ? `  peak ${fmtRate(session.peakTps)}` : "", tone: "muted" },
     ]);
 
-    // Opt-in only — duplicates OpenCode's native Context section.
     if (cfg.showTotals) {
       const metricTokens = cfg.metric === "output" ? session.output : session.generated;
       const totals = [`${fmtTokens(metricTokens)} tok`, `${session.count} msg`];
@@ -107,6 +105,39 @@ export function buildView(input = {}) {
   }
 
   return { state: streaming ? "live" : "idle", lines };
+}
+
+/**
+ * One muted footer line: timing + session stats without repeating the headline.
+ */
+function pushCompactFooter({ push, cfg, streaming, live, last, session, metricKey, avgKey, headline }) {
+  const parts = [];
+
+  if (streaming && live) {
+    if (live.peak && (!Number.isFinite(headline) || Math.abs(live.peak - headline) > 0.05)) {
+      parts.push(`peak ${fmtRate(live.peak)}`);
+    }
+    if (cfg.showWaits && live.gaps > 0 && live.idleMs > 0) parts.push(`−${fmtMs(live.idleMs)} wait`);
+  } else if (last && last.done) {
+    if (last.ttftMs !== null && last.ttftMs !== undefined) parts.push(`ttft ${fmtMs(last.ttftMs)}`);
+    if (cfg.showWaits && last.gaps > 0 && last.idleMs > 0) parts.push(`−${fmtMs(last.idleMs)} wait`);
+  }
+
+  if (cfg.showSession && session && session.count > 0) {
+    const avg = session[avgKey];
+    const sameAsHead =
+      headline !== null && headline !== undefined && avg !== null && avg !== undefined && Math.abs(avg - headline) < 0.05;
+    if (avg !== null && avg !== undefined && !sameAsHead) parts.push(`avg ${fmtRate(avg)}`);
+    if (session.peakTps) {
+      const samePeak =
+        headline !== null && headline !== undefined && Math.abs(session.peakTps - headline) < 0.05;
+      if (!samePeak) parts.push(`peak ${fmtRate(session.peakTps)}`);
+    }
+  }
+
+  if (parts.length) {
+    push("footer", [{ text: parts.join(" · "), tone: "muted" }]);
+  }
 }
 
 /** Flatten a view's lines into plain strings (used by the demo + tests). */

@@ -14,13 +14,15 @@ import {
 
 test("fmtRate buckets and placeholder", () => {
   assert.equal(fmtRate(8.4), "8.4");
-  assert.equal(fmtRate(8.04), "8");
+  assert.equal(fmtRate(8.042), "8.04");
   assert.equal(fmtRate(12), "12");
-  assert.equal(fmtRate(99.6), "99.6");
+  assert.equal(fmtRate(99.64), "99.6");
   assert.equal(fmtRate(100), "100");
-  assert.equal(fmtRate(247.6), "248");
-  assert.equal(fmtRate(1234), "1.2k");
-  assert.equal(fmtRate(999.5), "1k");
+  assert.equal(fmtRate(192.15), "192.2");
+  assert.equal(fmtRate(247.64), "247.6");
+  assert.equal(fmtRate(1234), "1.23k");
+  assert.equal(fmtRate(999.5), "999.5");
+  assert.equal(fmtRate(1000), "1k");
   assert.equal(fmtRate(0), "0");
   assert.equal(fmtRate(null), "–");
   assert.equal(fmtRate(-1), "–");

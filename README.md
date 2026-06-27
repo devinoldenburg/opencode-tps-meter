@@ -14,12 +14,12 @@ replaces none of its sections.
 
 ```text
 streaming, mid tool call           after the turn completes
-TPS  192 tok/s                     TPS  192 tok/s
-██▇▇▆▆▅▅▄▄▃▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁   →   last 192 tok/s  ttft 618ms · −3.8s wait
-now  peak 198 tok/s · −3.8s wait    avg  192 tok/s  peak 192
+TPS  192.3 tok/s                   TPS  192.3 tok/s
+▇▆▅▄▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁            →   ttft 618ms · −3.8s wait
+peak 198.1 · −3.8s wait
 
-the headline TPS holds steady across the tool call; the sparkline dips because
-no tokens are flowing — and the 3.8s the tool took is excluded, not counted.
+the headline holds steady across the tool call; the sparkline dips while no
+tokens flow — and the 3.8s tool wait is excluded from the rate, not counted.
 ```
 
 > Try it right now without OpenCode: `node tools/demo.mjs` (animated) or `node tools/demo.mjs --ci`.
@@ -124,11 +124,11 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `slot` | `"sidebar_content"` | Sidebar slot to render into (stacking — additive). |
 | `metric` | `"generated"` | Headline metric: `"generated"` (output + reasoning) or `"output"`. |
 | `gapMs` | `1500` | Inter-token gap at/above which generation is treated as paused (tool/wait) and **excluded** from TPS. |
-| `detail` | `"full"` | `"full"`, `"compact"`, or `"minimal"` (header + sparkline only). |
+| `detail` | `"compact"` | `"compact"` (headline + one footer), `"full"` (last/avg rows), or `"minimal"`. |
 | `showSparkline` | `true` | Render the trailing-window sparkline line. Set `false` to show the headline + session line only. |
 | `windowMs` | `3000` | Trailing window for the live **sparkline** rate (the headline uses active-gen time, not this). |
 | `pollMs` | `250` | Live re-sample cadence (sparkline animation + decay). |
-| `sparkWidth` | `24` | Sparkline width in cells. |
+| `sparkWidth` | `18` | Sparkline width in cells. |
 | `seriesLength` | `40` | Sparkline history length. |
 | `showWaits` | `true` | Surface excluded tool/wait time as `−Ns wait`. |
 | `showSession` | `true` | Show the session average + peak line. |
