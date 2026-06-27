@@ -35,7 +35,11 @@ export {
   resolveSessionID,
   messageInfo,
   eventSessionID,
+  eventBelongsToView,
+  removalSessionID,
+  removalMessageID,
   deltaTextLength,
   generatedTokens,
   summaryMessage,
 } from "./session.js";
+export { parsePartDelta, partCharsAdded, liveHeadlineTps } from "./adapter.js";

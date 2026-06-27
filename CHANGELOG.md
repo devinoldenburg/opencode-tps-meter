@@ -6,6 +6,24 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-06-27
+
+### Fixed
+
+- **Multi-session isolation.** Events without a session id no longer update every mounted
+  meter; `message.removed` and `message.part.removed` are scoped to the view session.
+- **Live headline semantics.** Headline TPS prefers active-generation (`GenerationTimer`)
+  over raw window rate; sparkline still uses the trailing window for smooth texture.
+- **Summary-live lifecycle.** Synthetic `summary-live` timers clear on session token reset,
+  session id change, and component cleanup (no orphan timers / stale live state).
+- **Session signals.** `session.status` / `session.idle` / `session.updated` trigger an
+  immediate `session.get()` poll, not only a repaint tick.
+
+### Added
+
+- **`plugins/tps/adapter.js`** — pure part-delta parsing and live headline selection (tested).
+- **`eventBelongsToView`**, `removalSessionID`, `removalMessageID` helpers.
+
 ## [0.1.6] — 2026-06-27
 
 ### Fixed

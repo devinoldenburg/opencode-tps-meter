@@ -46,10 +46,13 @@ import {
   resolveSessionID,
   messageInfo,
   eventSessionID,
-  deltaTextLength,
+  eventBelongsToView,
+  removalSessionID,
+  removalMessageID,
   generatedTokens,
   summaryMessage,
 } from "./tps/session.js";
+import { parsePartDelta, partCharsAdded, liveHeadlineTps } from "./tps/adapter.js";
 
 const id = "opencode-tps-meter";
 type AnyRecord = Record<string, any>;
@@ -110,14 +113,29 @@ function TpsView(props: AnyRecord) {
   let summaryCursor: { id: string; generated: number } | null = null;
   let summaryLiveId: string | null = null;
 
+  const clearSummaryLive = () => {
+    if (summaryLiveId) {
+      timers.delete(summaryLiveId);
+      if (currentMsgId === summaryLiveId) currentMsgId = null;
+      summaryLiveId = null;
+    }
+  };
+
   const pollSessionSummary = () => {
     const current = currentSession();
     const generated = generatedTokens(current?.tokens);
     const sid = viewSessionID();
     const id = String(current?.id ?? sid);
-    if (!current || generated <= 0) return current;
+    if (!current || generated <= 0) {
+      if (generated <= 0) {
+        summaryCursor = null;
+        clearSummaryLive();
+      }
+      return current;
+    }
     if (!summaryCursor || summaryCursor.id !== id || generated < summaryCursor.generated) {
       summaryCursor = { id, generated };
+      clearSummaryLive();
       return current;
     }
     const added = generated - summaryCursor.generated;
@@ -135,62 +153,24 @@ function TpsView(props: AnyRecord) {
 
   onCleanup(() => {
     if (timer !== null) clearInterval(timer);
+    clearSummaryLive();
+    timers.clear();
+    observedMessages.clear();
+    partLen.clear();
   });
 
   const offs: Array<() => void> = [];
   try {
     const bus = props.api.event;
     if (bus && typeof bus.on === "function") {
-      const inViewSession = (evSession: unknown) => {
-        if (evSession === undefined || evSession === null) return true;
-        return String(evSession) === viewSessionID();
-      };
-
       const onPart = (event: AnyRecord) => {
         try {
-          const ev = event?.properties || {};
-          const part = (ev.part && typeof ev.part === "object" ? ev.part : {}) as AnyRecord;
-          const evSession = eventSessionID(ev, part);
-          if (!inViewSession(evSession)) return;
-
-          const eventType = event?.type || "";
-          const partType =
-            part.type ??
-            ev.type ??
-            ev.partType ??
-            (eventType.includes(".reasoning.") ? "reasoning" : eventType.includes(".text.") ? "text" : undefined);
-          if (partType && partType !== "text" && partType !== "reasoning") return;
-
-          const messageID =
-            part.messageID ??
-            ev.messageID ??
-            ev.message_id ??
-            ev.assistantMessageID ??
-            ev.info?.id ??
-            currentMsgId ??
-            `${viewSessionID()}:live`;
-          const partID =
-            part.id ??
-            ev.partID ??
-            ev.part_id ??
-            ev.textID ??
-            ev.reasoningID ??
-            ev.id ??
-            `${messageID}:part`;
-
+          const parsed = parsePartDelta(viewSessionID(), event);
+          if (!parsed.ok) return;
+          const { messageID, partID, full, deltaLen } = parsed;
           const now = Date.now();
-          const fullText =
-            typeof part.text === "string"
-              ? part.text
-              : typeof ev.text === "string"
-                ? ev.text
-                : typeof ev.content === "string"
-                  ? ev.content
-                  : "";
-          const full = fullText.length;
           const prev = partLen.get(partID);
-          const deltaLen = deltaTextLength(ev.delta ?? ev.textDelta ?? ev.contentDelta);
-          const added = deltaLen > 0 ? deltaLen : prev ? Math.max(0, full - prev.length) : full;
+          const added = partCharsAdded(full, deltaLen, prev);
           const storedLength = Math.max(full, (prev?.length || 0) + Math.max(0, added));
           partLen.set(partID, { length: storedLength, messageID });
 
@@ -214,7 +194,7 @@ function TpsView(props: AnyRecord) {
           const ev = event?.properties || {};
           const info = messageInfo(ev.info ?? ev.message ?? ev) as AnyRecord;
           const evSession = info?.sessionID ?? eventSessionID(ev, null);
-          if (!inViewSession(evSession)) return;
+          if (!eventBelongsToView(viewSessionID(), evSession)) return;
 
           if (info && isAssistant(info) && info.id) {
             observedMessages.set(info.id, info);
@@ -243,6 +223,7 @@ function TpsView(props: AnyRecord) {
             const t = timers.get(info.id);
             if (t && generated > 0) t.setTokens(generated);
             if (currentMsgId === info.id) currentMsgId = null;
+            if (summaryLiveId && info.id && !String(info.id).endsWith(":summary")) clearSummaryLive();
           }
         } catch {
           /* ignore */
@@ -253,7 +234,9 @@ function TpsView(props: AnyRecord) {
       const onMessageRemoved = (event: AnyRecord) => {
         try {
           const ev = event?.properties || {};
-          const messageID = ev.messageID ?? ev.message_id ?? ev.id ?? ev.message?.id;
+          const evSession = removalSessionID(ev);
+          if (!eventBelongsToView(viewSessionID(), evSession)) return;
+          const messageID = removalMessageID(ev);
           if (messageID) {
             timers.delete(messageID);
             observedMessages.delete(messageID);
@@ -271,6 +254,9 @@ function TpsView(props: AnyRecord) {
       const onPartRemoved = (event: AnyRecord) => {
         try {
           const ev = event?.properties || {};
+          const part = ev.part && typeof ev.part === "object" ? ev.part : null;
+          const evSession = eventSessionID(ev, part);
+          if (!eventBelongsToView(viewSessionID(), evSession)) return;
           const partID = ev.partID ?? ev.part_id ?? ev.id ?? ev.part?.id;
           if (partID) partLen.delete(partID);
         } catch {
@@ -278,7 +264,14 @@ function TpsView(props: AnyRecord) {
         }
       };
 
-      const onSessionSignal = () => bump();
+      const onSessionSignal = () => {
+        try {
+          pollSessionSummary();
+        } catch {
+          /* ignore */
+        }
+        bump();
+      };
 
       const subs: Array<[string, (e: AnyRecord) => void]> = [
         ["message.part.updated", onPart],
@@ -389,12 +382,12 @@ function TpsView(props: AnyRecord) {
       (summaryLiveId && timers.get(summaryLiveId)) ||
       (currentMsgId && timers.get(currentMsgId)) ||
       null;
-    const windowTps = meter.rate(now);
+    const streamingActive = meter.active(now) || (inflight !== null && (inflight.tps() ?? 0) > 0);
     const live = {
-      tps: windowTps > 0 ? windowTps : inflight ? inflight.tps() : null,
-      active: meter.active(now),
+      tps: liveHeadlineTps(inflight, meter, now),
+      active: streamingActive,
       series: meter.series(),
-      peak: meter.peak,
+      peak: Math.max(meter.peak, inflight ? inflight.tps() ?? 0 : 0),
       gaps: inflight ? inflight.gaps : 0,
       idleMs: inflight ? inflight.idleMs : 0,
     };

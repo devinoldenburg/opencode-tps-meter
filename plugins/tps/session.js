@@ -74,20 +74,65 @@ export function resolveSessionID(ctx, slotProps, api) {
 }
 
 /**
- * Session id carried on an event (undefined = treat as in-scope for the view).
+ * Session id on an event payload, if any.
  *
  * @param {Record<string, unknown>} evProps
  * @param {Record<string, unknown>|null|undefined} part
  */
 export function eventSessionID(evProps, part) {
   const p = part && typeof part === "object" ? part : {};
+  const info =
+    evProps.info && typeof evProps.info === "object"
+      ? evProps.info
+      : evProps.message && typeof evProps.message === "object"
+        ? messageInfo(evProps.message)
+        : null;
   return (
     p.sessionID ??
     p.sessionId ??
     p.session_id ??
     evProps.sessionID ??
     evProps.sessionId ??
-    evProps.session_id
+    evProps.session_id ??
+    info?.sessionID ??
+    info?.sessionId ??
+    info?.session_id
+  );
+}
+
+/**
+ * Whether an event should update a per-session sidebar view.
+ * Unscoped events (no session id) are ignored by default so multiple mounted
+ * meters do not all ingest the same stream.
+ *
+ * @param {string} viewSessionID
+ * @param {unknown} evSession
+ * @param {{ allowUnscoped?: boolean }} [opts]
+ */
+export function eventBelongsToView(viewSessionID, evSession, opts = {}) {
+  const allowUnscoped = opts.allowUnscoped === true;
+  if (evSession === undefined || evSession === null || evSession === "") {
+    return allowUnscoped;
+  }
+  return String(evSession) === String(viewSessionID);
+}
+
+/** @param {Record<string, unknown>} evProps */
+export function removalSessionID(evProps) {
+  const msg = evProps.message && typeof evProps.message === "object" ? evProps.message : null;
+  const info = messageInfo(evProps.info ?? msg);
+  return eventSessionID(evProps, null) ?? info?.sessionID ?? info?.sessionId ?? info?.session_id;
+}
+
+/** @param {Record<string, unknown>} evProps */
+export function removalMessageID(evProps) {
+  const msg = evProps.message && typeof evProps.message === "object" ? evProps.message : null;
+  return (
+    evProps.messageID ??
+    evProps.message_id ??
+    evProps.id ??
+    msg?.id ??
+    (messageInfo(msg)?.id)
   );
 }
 

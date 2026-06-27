@@ -4,6 +4,7 @@ import {
   resolveSessionID,
   messageInfo,
   eventSessionID,
+  eventBelongsToView,
   deltaTextLength,
   generatedTokens,
   summaryMessage,
@@ -35,6 +36,12 @@ test("messageInfo unwraps nested info", () => {
 test("eventSessionID reads part and property aliases", () => {
   assert.equal(eventSessionID({ session_id: "e1" }, {}), "e1");
   assert.equal(eventSessionID({}, { sessionID: "p1" }), "p1");
+  assert.equal(eventSessionID({ info: { sessionID: "i1" } }, {}), "i1");
+});
+
+test("eventBelongsToView ignores unscoped events", () => {
+  assert.equal(eventBelongsToView("a", undefined), false);
+  assert.equal(eventBelongsToView("a", "a"), true);
 });
 
 test("deltaTextLength handles string and object deltas", () => {

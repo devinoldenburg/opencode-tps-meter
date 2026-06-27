@@ -60,7 +60,7 @@ The key idea: a turn's wall-clock includes tool execution and waits, so `tokens 
 - **Additive** — renders into the stacking `sidebar_content` slot, so your Context / MCP / LSP /
   Todo / Files sections stay exactly where they are.
 - **Theme-aware** colors with per-tone overrides; **crash-proof** (any API drift renders nothing).
-- **Measured** — 62 unit + integration tests over a pure, framework-free core, including a
+- **Measured** — 90+ unit + integration tests over a pure, framework-free core, including a
   server-stream simulation that proves the tool wait is excluded to the token.
 
 ## Install
