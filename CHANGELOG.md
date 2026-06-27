@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-27
+
+### Changed
+
+- **Native-style compact sidebar.** Section title on its own line, rate on the next (like
+  Context), muted sparkline, detail line with `TTFT` / `Wait` / `Peak` labels and spaced
+  separators. Removed extra top padding; default poll 200ms for smoother live updates.
+- **Sparkline** uses a dedicated muted tone; default width 16.
+
 ## [0.1.4] — 2026-06-27
 
 ### Changed

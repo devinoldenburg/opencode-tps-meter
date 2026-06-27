@@ -1,13 +1,9 @@
 /**
  * view.js — pure projection from measurements to render-ready lines.
  *
- * The TUI plugin (tps-meter.tsx) stays deliberately thin: it gathers inputs
- * (a live RateMeter snapshot, the exact stats for the last/active message, the
- * session aggregate, and the session status) and hands them here. `buildView`
- * returns a list of `lines`, each a list of `{ text, tone }` segments. `tone` is
- * a *semantic* color name; the plugin maps tones → theme colors. Keeping this
- * pure means the entire sidebar layout is asserted in unit tests, character for
- * character, with no terminal involved.
+ * Compact layout follows native OpenCode sidebar rhythm: section title, primary
+ * value, optional spark (while streaming), one muted detail line. Full layout
+ * keeps labeled rows for power users.
  *
  * Tones: "header" | "accent" | "value" | "good" | "warn" | "muted" | "label".
  */
@@ -15,15 +11,15 @@
 import { fmtRate, fmtTokens, fmtMs, fmtCost, sparkline } from "./format.js";
 import { DEFAULTS } from "./config.js";
 
-const HEAD_PAD = "  ";
+const FULL_HEAD_PAD = "  ";
 
 /**
  * @param {object} input
- * @param {object|null} input.live      Live snapshot `{ tps, active, series, peak, gaps?, idleMs? }` or null.
- * @param {object|null} input.last      messageStats() for the most-recent completed message, or null.
- * @param {object|null} input.session   aggregate() over the session, or null.
- * @param {string} [input.status]       "busy" | "idle" | "retry" | undefined.
- * @param {object} [input.config]       Display config (see DEFAULTS).
+ * @param {object|null} input.live
+ * @param {object|null} input.last
+ * @param {object|null} input.session
+ * @param {string} [input.status]
+ * @param {object} [input.config]
  * @returns {{state:string, lines:Array<{key:string, segments:Array<{text:string,tone:string}>}>}}
  */
 export function buildView(input = {}) {
@@ -49,28 +45,39 @@ export function buildView(input = {}) {
   const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null && s.text !== "") });
 
   const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
-  const headerSegs = [{ text: headerLabel, tone: "header" }];
-  if (headline !== null && headline !== undefined) {
-    headerSegs.push({ text: HEAD_PAD, tone: "muted" });
-    headerSegs.push({ text: fmtRate(headline), tone: streaming ? "accent" : "value" });
-    headerSegs.push({ text: ` ${cfg.unit}`, tone: "muted" });
+  const compact = cfg.detail === "compact";
+
+  if (compact) {
+    push("title", [{ text: headerLabel, tone: "header" }]);
+    if (headline !== null && headline !== undefined) {
+      push("rate", [
+        { text: fmtRate(headline), tone: streaming ? "accent" : "value" },
+        { text: ` ${cfg.unit}`, tone: "muted" },
+      ]);
+    }
+  } else {
+    const headerSegs = [{ text: headerLabel, tone: "header" }];
+    if (headline !== null && headline !== undefined) {
+      headerSegs.push({ text: FULL_HEAD_PAD, tone: "muted" });
+      headerSegs.push({ text: fmtRate(headline), tone: streaming ? "accent" : "value" });
+      headerSegs.push({ text: ` ${cfg.unit}`, tone: "muted" });
+    }
+    push("header", headerSegs);
   }
-  push("header", headerSegs);
 
   const showSpark =
-    cfg.showSparkline && live && Array.isArray(live.series) && live.series.length && (cfg.detail !== "compact" || streaming);
+    cfg.showSparkline && live && Array.isArray(live.series) && live.series.length && (!compact || streaming);
   if (showSpark) {
-    push("spark", [{ text: sparkline(live.series, { width: cfg.sparkWidth }), tone: streaming ? "accent" : "muted" }]);
+    push("spark", [{ text: sparkline(live.series, { width: cfg.sparkWidth }), tone: "spark" }]);
   }
 
   if (cfg.detail === "minimal") return { state: streaming ? "live" : "idle", lines };
 
-  if (cfg.detail === "compact") {
+  if (compact) {
     pushCompactFooter({ push, cfg, streaming, live, last, session, metricKey, avgKey, headline });
     return { state: streaming ? "live" : "idle", lines };
   }
 
-  // ── full detail ───────────────────────────────────────────────────────────
   if (last && last.done) {
     const detail = [];
     if (last.ttftMs !== null && last.ttftMs !== undefined) detail.push(`ttft ${fmtMs(last.ttftMs)}`);
@@ -107,36 +114,33 @@ export function buildView(input = {}) {
   return { state: streaming ? "live" : "idle", lines };
 }
 
-/**
- * One muted footer line: timing + session stats without repeating the headline.
- */
 function pushCompactFooter({ push, cfg, streaming, live, last, session, metricKey, avgKey, headline }) {
   const parts = [];
 
   if (streaming && live) {
     if (live.peak && (!Number.isFinite(headline) || Math.abs(live.peak - headline) > 0.05)) {
-      parts.push(`peak ${fmtRate(live.peak)}`);
+      parts.push(`Peak ${fmtRate(live.peak)}`);
     }
-    if (cfg.showWaits && live.gaps > 0 && live.idleMs > 0) parts.push(`−${fmtMs(live.idleMs)} wait`);
+    if (cfg.showWaits && live.gaps > 0 && live.idleMs > 0) parts.push(`Wait ${fmtMs(live.idleMs)}`);
   } else if (last && last.done) {
-    if (last.ttftMs !== null && last.ttftMs !== undefined) parts.push(`ttft ${fmtMs(last.ttftMs)}`);
-    if (cfg.showWaits && last.gaps > 0 && last.idleMs > 0) parts.push(`−${fmtMs(last.idleMs)} wait`);
+    if (last.ttftMs !== null && last.ttftMs !== undefined) parts.push(`TTFT ${fmtMs(last.ttftMs)}`);
+    if (cfg.showWaits && last.gaps > 0 && last.idleMs > 0) parts.push(`Wait ${fmtMs(last.idleMs)}`);
   }
 
   if (cfg.showSession && session && session.count > 0) {
     const avg = session[avgKey];
     const sameAsHead =
       headline !== null && headline !== undefined && avg !== null && avg !== undefined && Math.abs(avg - headline) < 0.05;
-    if (avg !== null && avg !== undefined && !sameAsHead) parts.push(`avg ${fmtRate(avg)}`);
+    if (avg !== null && avg !== undefined && !sameAsHead) parts.push(`Avg ${fmtRate(avg)}`);
     if (session.peakTps) {
       const samePeak =
         headline !== null && headline !== undefined && Math.abs(session.peakTps - headline) < 0.05;
-      if (!samePeak) parts.push(`peak ${fmtRate(session.peakTps)}`);
+      if (!samePeak) parts.push(`Peak ${fmtRate(session.peakTps)}`);
     }
   }
 
   if (parts.length) {
-    push("footer", [{ text: parts.join(" · "), tone: "muted" }]);
+    push("footer", [{ text: parts.join("  ·  "), tone: "muted" }]);
   }
 }
 

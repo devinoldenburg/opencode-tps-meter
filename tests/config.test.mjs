@@ -9,10 +9,10 @@ test("defaults when given nothing", () => {
   assert.equal(c.slot, "sidebar_content");
   assert.equal(c.metric, "generated");
   assert.equal(c.detail, "compact");
-  assert.equal(c.sparkWidth, 18);
+  assert.equal(c.sparkWidth, 16);
+  assert.equal(c.pollMs, 200);
   assert.equal(c.windowMs, 3000);
   assert.equal(c.gapMs, 1500);
-  assert.equal(c.pollMs, 250);
   assert.equal(c.showCost, false); // native Context already shows cost
   assert.equal(c.showTotals, false);
   assert.equal(c.showWaits, true);

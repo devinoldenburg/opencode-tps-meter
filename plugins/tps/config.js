@@ -12,13 +12,14 @@ export const TONE_TO_THEME = {
   warn: "warning",
   muted: "textMuted",
   label: "textMuted",
+  spark: "textMuted",
 };
 
 export const DEFAULTS = {
   enabled: true,
   order: 150, // just after the native Context/usage section (order 100)
   slot: "sidebar_content", // stacking slot — additive, never replaces native content
-  pollMs: 250, // live re-sample cadence (sparkline animation + decay)
+  pollMs: 200, // live re-sample cadence (sparkline animation + decay)
   windowMs: 3000, // trailing window for the live sparkline rate
   gapMs: 1500, // inter-token gap at/above which generation is "paused" (tool/wait) and excluded
   seriesLength: 40, // sparkline history length
@@ -27,7 +28,7 @@ export const DEFAULTS = {
   icon: "", // optional prefix glyph; empty = none (clean/professional default)
   label: "TPS",
   unit: "tok/s",
-  sparkWidth: 18,
+  sparkWidth: 16,
   showSparkline: true,
   showSession: true,
   showWaits: true, // surface excluded tool/wait time (precision signal)

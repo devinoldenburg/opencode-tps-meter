@@ -50,7 +50,7 @@ test("streaming surfaces excluded wait time when a tool gap occurred", () => {
   const live = { tps: 200, active: true, peak: 240, series: [200], gaps: 1, idleMs: 5000 };
   const v = buildView({ live, status: "busy" });
   const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
-  assert.ok(lines.some((l) => l.includes("−5s wait")), `expected an excluded-wait note in ${JSON.stringify(lines)}`);
+  assert.ok(lines.some((l) => l.includes("Wait 5s")), `expected an excluded-wait note in ${JSON.stringify(lines)}`);
 });
 
 test("empty detail segments are filtered out", () => {
@@ -71,12 +71,12 @@ test("streaming with history shows both live and last details", () => {
 test("live headline segment is toned 'accent', idle is 'value'", () => {
   const live = { tps: 80, active: true, peak: 80, series: [80], gaps: 0, idleMs: 0 };
   const liveView = buildView({ live, status: "busy" });
-  const headlineTone = liveView.lines[0].segments.find((s) => s.text === "80").tone;
+  const headlineTone = liveView.lines.flatMap((l) => l.segments).find((s) => s.text === "80").tone;
   assert.equal(headlineTone, "accent");
 
   const last = messageStats(LAST_MSG, 1420);
   const idleView = buildView({ last, session: aggregate([last]), status: "idle" });
-  const idleTone = idleView.lines[0].segments.find((s) => s.text === "150").tone;
+  const idleTone = idleView.lines.flatMap((l) => l.segments).find((s) => s.text === "150").tone;
   assert.equal(idleTone, "value");
 });
 
@@ -108,7 +108,7 @@ test("busy status forces live even if the meter just started (no window yet)", (
   const v = buildView({ live: justStarted, last: null, session: null, status: "busy" });
   assert.equal(v.state, "live");
   // headline is the live rate, toned 'accent' (the only live/idle cue now that the badge is gone)
-  const headline = v.lines[0].segments.find((s) => s.text === "40");
+  const headline = v.lines.flatMap((l) => l.segments).find((s) => s.text === "40");
   assert.ok(headline && headline.tone === "accent");
 });
 
@@ -135,14 +135,15 @@ test("compact default: idle shows headline + one timing footer (no redundant avg
   const last = messageStats(LAST_MSG, 1420);
   const session = aggregate([last]);
   const v = buildView({ live: null, last, session, status: "idle" });
-  assert.equal(renderText(v), ["TPS  150 tok/s", "ttft 420ms"].join("\n"));
+  assert.equal(renderText(v), ["TPS", "150 tok/s", "TTFT 420ms"].join("\n"));
 });
 
 test("compact streaming: sparkline + peak footer when peak differs", () => {
   const live = { tps: 120, active: true, peak: 130, series: [0, 30, 60, 90, 120], gaps: 0, idleMs: 0 };
   const v = buildView({ live, status: "busy" });
   const lines = v.lines.map((l) => l.segments.map((s) => s.text).join(""));
-  assert.equal(lines[0], "TPS  120 tok/s");
-  assert.equal(lines[1].length, 18);
-  assert.equal(lines[2], "peak 130");
+  assert.equal(lines[0], "TPS");
+  assert.equal(lines[1], "120 tok/s");
+  assert.equal(lines[2].length, 16);
+  assert.equal(lines[3], "Peak 130");
 });

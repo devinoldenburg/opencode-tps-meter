@@ -298,12 +298,19 @@ function TpsView(props: AnyRecord) {
     });
   });
 
+  const lineStyle = (key: string) => {
+    if (key === "title" || key === "header") return { fg: toneColor("header") };
+    if (key === "rate") return { fg: toneColor("value") };
+    if (key === "spark") return { fg: toneColor("spark") };
+    return undefined;
+  };
+
   return (
     <Show when={view().state !== "none"}>
-      <box flexDirection="column" paddingTop={1} gap={0}>
+      <box flexDirection="column" gap={0}>
         <For each={view().lines}>
           {(line) => (
-            <text>
+            <text style={lineStyle(line.key)}>
               <For each={line.segments}>
                 {(seg) =>
                   seg.tone === "header" ? (

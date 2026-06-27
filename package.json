@@ -1,6 +1,6 @@
 {
   "name": "@devinoldenburg/opencode-tps-meter",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A precise tokens-per-second (TPS) meter for the OpenCode TUI sidebar — live throughput, time-to-first-token, and per-session averages, measured from the OpenCode event stream.",
   "type": "module",
   "main": "plugins/tps/root.js",

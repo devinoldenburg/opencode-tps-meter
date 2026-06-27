@@ -13,13 +13,13 @@ replaces none of its sections.
 ![node >= 20.11](https://img.shields.io/badge/node-%3E%3D20.11-3c873a.svg)
 
 ```text
-streaming, mid tool call           after the turn completes
-TPS  192.3 tok/s                   TPS  192.3 tok/s
-▇▆▅▄▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁            →   ttft 618ms · −3.8s wait
-peak 198.1 · −3.8s wait
+streaming                          after the turn completes
+TPS                                TPS
+192.3 tok/s                        192.3 tok/s
+▇▆▅▄▃▂▁▁▁▁▁▁▁▁▁▁                 →   TTFT 618ms  ·  Wait 3.8s
+Peak 198.1  ·  Wait 3.8s
 
-the headline holds steady across the tool call; the sparkline dips while no
-tokens flow — and the 3.8s tool wait is excluded from the rate, not counted.
+title + value stack like native Context; tool wait is excluded from the rate.
 ```
 
 > Try it right now without OpenCode: `node tools/demo.mjs` (animated) or `node tools/demo.mjs --ci`.
@@ -127,8 +127,8 @@ Pass options via the OpenCode plugin tuple in `tui.json`:
 | `detail` | `"compact"` | `"compact"` (headline + one footer), `"full"` (last/avg rows), or `"minimal"`. |
 | `showSparkline` | `true` | Render the trailing-window sparkline line. Set `false` to show the headline + session line only. |
 | `windowMs` | `3000` | Trailing window for the live **sparkline** rate (the headline uses active-gen time, not this). |
-| `pollMs` | `250` | Live re-sample cadence (sparkline animation + decay). |
-| `sparkWidth` | `18` | Sparkline width in cells. |
+| `pollMs` | `200` | Live re-sample cadence (sparkline animation + decay). |
+| `sparkWidth` | `16` | Sparkline width in cells. |
 | `seriesLength` | `40` | Sparkline history length. |
 | `showWaits` | `true` | Surface excluded tool/wait time as `−Ns wait`. |
 | `showSession` | `true` | Show the session average + peak line. |
