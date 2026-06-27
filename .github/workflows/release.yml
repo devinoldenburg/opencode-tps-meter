@@ -79,6 +79,7 @@ jobs:
       - name: GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          name: ${{ github.ref_name }}
           generate_release_notes: true
           # Scoped package → tarball is `devinoldenburg-opencode-tps-meter-<ver>.tgz`
           files: devinoldenburg-opencode-tps-meter-*.tgz

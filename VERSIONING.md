@@ -56,8 +56,9 @@ the package to the npm registry and creates a GitHub Release with generated note
    git push origin v0.X.Y
    ```
 
-3. The `Release` workflow publishes to npm (with provenance) and opens a GitHub Release. Confirm
-   the new version appears at <https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter>.
+3. The `Release` workflow publishes to npm (with provenance) and opens a GitHub Release titled
+   **`vX.Y.Z` only** (no subtitle). Release notes come from generated notes + `CHANGELOG.md`.
+   Confirm the new version appears at <https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter>.
 
 ### Pre-release / canary
 
