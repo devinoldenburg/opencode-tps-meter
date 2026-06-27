@@ -1,58 +1,57 @@
 # opencode-tps-meter
 
-**Live tokens-per-second in the OpenCode sidebar** — real generation speed, time-to-first-token, and session averages. Tool calls and permission waits are excluded from the rate (shown separately), so the number reflects how fast the model actually decodes, not how long the turn took on the wall clock.
+Tokens-per-second metering for the [OpenCode](https://opencode.ai) TUI sidebar. The plugin reports generation throughput, time-to-first-token, and per-session aggregates from the live event stream. Inter-turn waits (tools, permissions, provider stalls) are excluded from the rate and reported separately.
+
+| | |
+|---|---|
+| Package | [`@devinoldenburg/opencode-tps-meter`](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter) |
+| Plugin id | `opencode-tps-meter` |
+| OpenCode | TUI plugin (`sidebar_content`), `@opencode-ai/plugin` ≥ 1.15 |
+| Node (tooling) | ≥ 20.11 |
 
 [![CI](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml/badge.svg)](https://github.com/devinoldenburg/opencode-tps-meter/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@devinoldenburg/opencode-tps-meter)](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![npm version](https://img.shields.io/npm/v/@devinoldenburg/opencode-tps-meter)](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-```text
-TPS
-192.3 tok/s
-▇▆▅▄▃▂▁▁▁▁▁▁▁▁▁▁
-Peak 198.1  ·  Wait 3.8s     ← wait is not counted in tok/s
-```
+## Contents
 
-Adds a **TPS** block next to Context / MCP / LSP — it does not replace native sections or duplicate token totals and cost (those stay in Context).
+- [Overview](#overview)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Metrics](#metrics)
+- [Development](#development)
+- [Documentation](#documentation)
+- [License](#license)
 
----
+## Overview
 
-## Download & install
+The meter adds a **TPS** section alongside existing sidebar blocks (Context, MCP, LSP, and others). It does not remove or replace native UI. Token totals and cost remain in Context; this plugin focuses on throughput only.
 
-Published on npm as **`@devinoldenburg/opencode-tps-meter`** (scoped). The global command is still **`opencode-tps-meter`**.
+Measurement uses active generation time: time between streamed token chunks, with gaps at or above a configurable threshold classified as non-generation wait. Completed assistant messages reconcile against provider token counts and per-model character-to-token calibration.
 
-### 1. Recommended — npm + installer
+## Installation
+
+### Standard
+
+Install the CLI globally, run the configurator, then restart the OpenCode TUI.
 
 ```bash
 npm install -g @devinoldenburg/opencode-tps-meter
 opencode-tps-meter
 ```
 
-The installer updates `~/.config/opencode` (or your OpenCode config dir): `tui.json`, `package.json`, and runs `npm install` there.
+The command writes or updates `tui.json` and `package.json` under your OpenCode config directory (typically `~/.config/opencode`) and installs dependencies there.
 
-**Restart the OpenCode TUI.** You should see **TPS** in the sidebar while a session is active.
-
-Pin a version:
+To install a specific release:
 
 ```bash
-npm install -g @devinoldenburg/opencode-tps-meter@0.1.7
+npm install -g @devinoldenburg/opencode-tps-meter@<version>
 opencode-tps-meter
 ```
 
-Latest release: [GitHub Releases](https://github.com/devinoldenburg/opencode-tps-meter/releases) · [npm](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter)
+Artifacts: [npm registry](https://www.npmjs.com/package/@devinoldenburg/opencode-tps-meter) · [GitHub releases](https://github.com/devinoldenburg/opencode-tps-meter/releases)
 
-### 2. One-off without global install
-
-From your OpenCode config directory (usually `~/.config/opencode`):
-
-```bash
-cd ~/.config/opencode
-npm install @devinoldenburg/opencode-tps-meter@latest
-```
-
-Add the TUI plugin (see [Manual setup](#manual-setup) below), then `npm install` again if needed and restart the TUI.
-
-### 3. From source (clone)
+### Project checkout
 
 ```bash
 git clone https://github.com/devinoldenburg/opencode-tps-meter.git
@@ -60,37 +59,15 @@ cd opencode-tps-meter
 node scripts/install.mjs --local
 ```
 
-`--local` links this checkout into your OpenCode config via a `file:` dependency (good for hacking on the plugin).
+`--local` registers the checkout as a `file:` dependency in the OpenCode config tree. Additional flags: `--dir`, `--no-install`, `--dry-run`, `--uninstall`, `--print`, `--help`.
 
-Other installer flags: `--dir <path>`, `--no-install`, `--dry-run`, `--uninstall`, `--print`, `--help`.
+### Manual registration
 
-### 4. Manual setup
+In the OpenCode config directory, declare the dependency and plugin entry.
 
-In your OpenCode config folder:
+`package.json`:
 
-**`tui.json`**
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["@devinoldenburg/opencode-tps-meter/tui"]
-}
-```
-
-With options:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": [
-    ["@devinoldenburg/opencode-tps-meter/tui", { "detail": "compact", "gapMs": 1500 }]
-  ]
-}
-```
-
-**`package.json`**
-
-```jsonc
+```json
 {
   "dependencies": {
     "@devinoldenburg/opencode-tps-meter": "latest"
@@ -98,102 +75,90 @@ With options:
 }
 ```
 
-Then:
+`tui.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": ["@devinoldenburg/opencode-tps-meter/tui"]
+}
+```
+
+Install and restart:
 
 ```bash
-cd ~/.config/opencode   # or your config path
 npm install
 ```
 
-Restart the OpenCode TUI.
+Optional plugin options use the tuple form:
 
-### Uninstall
+```json
+{
+  "plugin": [
+    ["@devinoldenburg/opencode-tps-meter/tui", { "detail": "compact", "gapMs": 1500 }]
+  ]
+}
+```
+
+### Removal
 
 ```bash
 opencode-tps-meter --uninstall
 ```
 
-Or remove the plugin entry from `tui.json` and the dependency from `package.json`, then `npm install`.
-
----
-
-## What you get
-
-| Reading | Meaning |
-|--------|---------|
-| **Headline tok/s** | Active generation speed (stream timing, not full turn wall clock) |
-| **TTFT** | Time to first streamed token |
-| **Wait** | Tool / permission / stall time excluded from the rate |
-| **Session avg** | Pooled over the session (Σ tokens ÷ Σ active time) |
-| **Sparkline** | Recent windowed rate while streaming (texture only) |
-
-When a turn finishes, the headline locks to the provider’s exact token count over the same measured active time, so it should not jump arbitrarily.
-
----
+Alternatively, remove the plugin and dependency entries from `tui.json` and `package.json`, then run `npm install`.
 
 ## Configuration
 
-Options go in the `["@devinoldenburg/opencode-tps-meter/tui", { … }]` tuple in `tui.json`.
+Options are passed as the second element of the plugin tuple in `tui.json`. Environment variables override or mirror several keys; see `plugins/tps/config.js` for the full resolver.
 
-| Option | Default | Notes |
-|--------|---------|--------|
-| `enabled` | `true` | `false` disables without uninstalling |
-| `detail` | `"compact"` | `"compact"` · `"full"` · `"minimal"` |
-| `metric` | `"generated"` | `"generated"` (output + reasoning) or `"output"` |
-| `gapMs` | `1500` | Gaps ≥ this between chunks count as wait, not generation |
-| `showSparkline` | `true` | Trailing spark while streaming |
-| `showSession` | `true` | Session average / peak in footer |
-| `showWaits` | `true` | Show excluded wait time |
-| `showTotals` / `showCost` | `false` | Off by default (Context already shows these) |
-| `order` | `150` | Sidebar order (Context ≈ 100) |
-| `pollMs` / `windowMs` | `200` / `3000` | Live refresh / spark window |
-| `icon` / `label` / `unit` | `""` / `TPS` / `tok/s` | Header text |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `true` | Disable rendering without uninstalling |
+| `detail` | `compact` | Layout: `compact`, `full`, or `minimal` |
+| `metric` | `generated` | Headline basis: `generated` or `output` |
+| `gapMs` | `1500` | Minimum inter-chunk gap (ms) treated as wait |
+| `showSparkline` | `true` | Trailing rate sparkline while streaming |
+| `showSession` | `true` | Session average and peak in footer |
+| `showWaits` | `true` | Display excluded wait duration |
+| `showTotals` | `false` | Aggregate token and message counts |
+| `showCost` | `false` | Include cost in totals line |
+| `order` | `150` | Sidebar section ordering |
+| `pollMs` | `200` | UI refresh interval (ms) |
+| `windowMs` | `3000` | Sparkline trailing window (ms) |
+| `label` / `unit` | `TPS` / `tok/s` | Section label and unit suffix |
 
-**Environment (quick toggles):** `OPENCODE_TPS_METER=0`, `OPENCODE_TPS_METER_DISABLE=1`, `OPENCODE_TPS_METER_METRIC=output`, `OPENCODE_TPS_METER_DETAIL=compact`, `OPENCODE_TPS_METER_GAP_MS=1000`, and others — see `plugins/tps/config.js`.
+Common environment variables: `OPENCODE_TPS_METER=0`, `OPENCODE_TPS_METER_DISABLE=1`, `OPENCODE_TPS_METER_METRIC`, `OPENCODE_TPS_METER_DETAIL`, `OPENCODE_TPS_METER_GAP_MS`.
 
----
+## Metrics
 
-## Try without OpenCode
+| Field | Definition |
+|-------|------------|
+| Headline rate | Tokens per second over measured active generation time for the current or last completed turn |
+| TTFT | Elapsed time from turn start to first streamed token |
+| Wait | Cumulative duration of gaps classified as non-generation |
+| Session average | Pooled tokens divided by pooled active time across completed turns in the session |
+| Sparkline | Windowed instantaneous rate for visual feedback during streaming |
 
-```bash
-git clone https://github.com/devinoldenburg/opencode-tps-meter.git
-cd opencode-tps-meter
-npm install
-node tools/demo.mjs        # animated demo
-node tools/demo.mjs --ci  # deterministic smoke test
-```
-
----
-
-## How it works (short)
-
-1. Stream deltas from OpenCode events are timestamped; gaps larger than `gapMs` are treated as waits.
-2. Live rate uses **active-generation time**; completed turns use provider token counts and recalibrate chars→tokens per model.
-3. Pure math lives in `plugins/tps/*.js` (unit-tested); `plugins/tps-meter.tsx` is the thin TUI adapter.
-
-Details: [`ARCHITECTURE.md`](./ARCHITECTURE.md) · precision notes in previous docs / `CHANGELOG.md`.
-
----
+End-to-end wall-clock rate is intentionally not used for the headline; it conflates decoding with tool and permission latency.
 
 ## Development
 
 ```bash
-npm test              # 90+ tests (node --test)
-npm run verify:plugin # TSX smoke test (needs bun)
+npm test
+npm run verify:plugin
 npm run demo
-npm run pack:check
+node tools/demo.mjs --ci
 ```
 
-**Requires:** Node ≥ 20.11, OpenCode TUI with plugin slots (`@opencode-ai/plugin` 1.15+, tested on 1.17.x). Peer deps are provided by the OpenCode runtime at load time.
+Core logic is framework-free ESM under `plugins/tps/`. The TUI entry point is `plugins/tps-meter.tsx`. Peer dependencies (`@opentui/solid`, `solid-js`, `@opencode-ai/plugin`) are supplied by the OpenCode runtime when the plugin loads.
 
----
+## Documentation
 
-## Releases
-
-[Semantic Versioning](./VERSIONING.md) · [Changelog](./CHANGELOG.md) · tags `v*` publish to npm via GitHub Actions.
-
----
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — measurement model and module layout  
+- [CHANGELOG.md](./CHANGELOG.md) — release history  
+- [VERSIONING.md](./VERSIONING.md) — semver and publish process  
 
 ## License
 
-[MIT](./LICENSE) © Devin Oldenburg
+MIT. See [LICENSE](./LICENSE).
