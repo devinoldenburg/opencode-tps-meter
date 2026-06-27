@@ -338,8 +338,19 @@ const tui = async (api: AnyRecord, options: AnyRecord) => {
         },
       },
     });
-  } catch {
-    /* TUI runtime missing or API drift — register nothing rather than crash. */
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    try {
+      if (typeof process !== "undefined" && typeof process.emitWarning === "function") {
+        process.emitWarning(`opencode-tps-meter: failed to register TUI plugin — ${msg}`, {
+          code: "OPENCODE_TPS_METER_INIT",
+        });
+      } else if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(`opencode-tps-meter: failed to register TUI plugin — ${msg}`);
+      }
+    } catch {
+      /* never crash the host on diagnostics */
+    }
   }
 };
 

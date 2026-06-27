@@ -64,6 +64,16 @@ test("gap threshold boundary is exclusive of the threshold", () => {
   assert.equal(at.gaps, 1);
 });
 
+test("zero-token initial chunk does not set firstAt (TTFT stays on first real tokens)", () => {
+  const g = new GenerationTimer();
+  g.push(0, 5000);
+  assert.equal(g.firstAt, null);
+  assert.equal(g.tokens, 0);
+  g.push(10, 5100);
+  assert.equal(g.firstAt, 5100);
+  assert.equal(g.tokens, 10);
+});
+
 test("tokenless chunks do not consume the post-gap prime marker", () => {
   const g = new GenerationTimer({ gapThresholdMs: 1000 });
   g.push(10, 0);

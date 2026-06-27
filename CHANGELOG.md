@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-27
+
+### Fixed
+
+- **GenerationTimer TTFT.** `firstAt` is set only when a chunk carries a positive token count,
+  so a tokenless initial delta (e.g. zero-length `message.part.updated`) no longer anchors
+  time-to-first-token 500 ms early.
+- **TUI plugin init.** Registration failures emit `process.emitWarning` (code
+  `OPENCODE_TPS_METER_INIT`) or `console.warn` instead of failing silently.
+
+### Changed
+
+- **CI / release workflows.** Bump `actions/checkout` to v7, `actions/setup-node` to v6, and
+  `softprops/action-gh-release` to v3.
+
 ## [0.1.2] — 2026-06-21
 
 ### Fixed

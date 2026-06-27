@@ -87,8 +87,8 @@ export class GenerationTimer {
       }
     }
     if (this._pendingPrime) prime = true;
-    if (this._firstAt === null) this._firstAt = at;
     if (Number.isFinite(tok) && tok > 0) {
+      if (this._firstAt === null) this._firstAt = at;
       this._tokens += tok;
       if (prime) this._primeTokens += tok;
       this._pendingPrime = false;
