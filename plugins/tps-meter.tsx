@@ -42,6 +42,14 @@ import {
 } from "./tps/tps.js";
 import { buildView } from "./tps/view.js";
 import { resolveConfig, TONE_TO_THEME } from "./tps/config.js";
+import {
+  resolveSessionID,
+  messageInfo,
+  eventSessionID,
+  deltaTextLength,
+  generatedTokens,
+  summaryMessage,
+} from "./tps/session.js";
 
 const id = "opencode-tps-meter";
 type AnyRecord = Record<string, any>;
@@ -53,6 +61,7 @@ type AnyRecord = Record<string, any>;
  */
 function TpsView(props: AnyRecord) {
   const cfg = props.cfg as AnyRecord;
+  const viewSessionID = () => String(props.sessionID);
   const theme = () => props.api.theme.current;
   const toneColor = (tone: string) => {
     const override = cfg.colors && cfg.colors[tone];
@@ -62,17 +71,23 @@ function TpsView(props: AnyRecord) {
     return t[themeKey] || t.text;
   };
 
-  // The sparkline uses a windowed instantaneous rate (visual texture). The PRECISE
-  // numbers come from per-message GenerationTimers, which measure active-generation
-  // time only — excluding tool calls, permission waits, and stalls inside a turn.
   const meter = new RateMeter({ windowMs: cfg.windowMs, seriesLength: cfg.seriesLength });
-  const timers = new Map<string, GenerationTimer>(); // messageID -> active-gen timer
+  const timers = new Map<string, GenerationTimer>();
+  const observedMessages = new Map<string, AnyRecord>();
   const partLen = new Map<string, { length: number; messageID?: string }>();
-  const ratioByModel = new Map<string, number>(); // modelID/providerID -> chars/token calibration
-  let currentMsgId: string | null = null; // most recently observed streaming message
+  const ratioByModel = new Map<string, number>();
+  let currentMsgId: string | null = null;
 
   const modelKey = (info: AnyRecord | null | undefined) => `${info?.providerID ?? ""}/${info?.modelID ?? ""}`;
   const ratioFor = (info: AnyRecord | null | undefined) => ratioByModel.get(modelKey(info)) ?? DEFAULT_CHARS_PER_TOKEN;
+
+  const currentSession = () => {
+    try {
+      return (props.api.state.session.get(viewSessionID()) as AnyRecord) || null;
+    } catch {
+      return null;
+    }
+  };
 
   const timerFor = (messageID: string) => {
     let t = timers.get(messageID);
@@ -92,52 +107,125 @@ function TpsView(props: AnyRecord) {
   const [tick, setTick] = createSignal(0);
   const bump = () => setTick((x) => (x + 1) % 1_000_000);
   let timer: ReturnType<typeof setInterval> | null = null;
+  let summaryCursor: { id: string; generated: number } | null = null;
+  let summaryLiveId: string | null = null;
+
+  const pollSessionSummary = () => {
+    const current = currentSession();
+    const generated = generatedTokens(current?.tokens);
+    const sid = viewSessionID();
+    const id = String(current?.id ?? sid);
+    if (!current || generated <= 0) return current;
+    if (!summaryCursor || summaryCursor.id !== id || generated < summaryCursor.generated) {
+      summaryCursor = { id, generated };
+      return current;
+    }
+    const added = generated - summaryCursor.generated;
+    summaryCursor = { id, generated };
+    if (added > 0) {
+      const now = Date.now();
+      summaryLiveId = `${id}:summary-live`;
+      timerFor(summaryLiveId).push(added, now);
+      currentMsgId = summaryLiveId;
+      meter.push(added, now);
+      bump();
+    }
+    return current;
+  };
+
   onCleanup(() => {
     if (timer !== null) clearInterval(timer);
   });
 
-  // ── Precise live deltas + calibration via the event bus ────────────────────
   const offs: Array<() => void> = [];
   try {
     const bus = props.api.event;
     if (bus && typeof bus.on === "function") {
+      const inViewSession = (evSession: unknown) => {
+        if (evSession === undefined || evSession === null) return true;
+        return String(evSession) === viewSessionID();
+      };
+
       const onPart = (event: AnyRecord) => {
         try {
-          const part = event?.properties?.part;
-          if (!part || String(part.sessionID) !== String(props.sessionID)) return;
-          if (part.type !== "text" && part.type !== "reasoning") return;
+          const ev = event?.properties || {};
+          const part = (ev.part && typeof ev.part === "object" ? ev.part : {}) as AnyRecord;
+          const evSession = eventSessionID(ev, part);
+          if (!inViewSession(evSession)) return;
+
+          const eventType = event?.type || "";
+          const partType =
+            part.type ??
+            ev.type ??
+            ev.partType ??
+            (eventType.includes(".reasoning.") ? "reasoning" : eventType.includes(".text.") ? "text" : undefined);
+          if (partType && partType !== "text" && partType !== "reasoning") return;
+
+          const messageID =
+            part.messageID ??
+            ev.messageID ??
+            ev.message_id ??
+            ev.assistantMessageID ??
+            ev.info?.id ??
+            currentMsgId ??
+            `${viewSessionID()}:live`;
+          const partID =
+            part.id ??
+            ev.partID ??
+            ev.part_id ??
+            ev.textID ??
+            ev.reasoningID ??
+            ev.id ??
+            `${messageID}:part`;
+
           const now = Date.now();
-          const full = typeof part.text === "string" ? part.text.length : 0;
-          const delta = event?.properties?.delta;
-          const prev = partLen.get(part.id);
-          const added = typeof delta === "string" ? delta.length : prev ? Math.max(0, full - prev.length) : 0;
-          partLen.set(part.id, { length: full, messageID: part.messageID });
+          const fullText =
+            typeof part.text === "string"
+              ? part.text
+              : typeof ev.text === "string"
+                ? ev.text
+                : typeof ev.content === "string"
+                  ? ev.content
+                  : "";
+          const full = fullText.length;
+          const prev = partLen.get(partID);
+          const deltaLen = deltaTextLength(ev.delta ?? ev.textDelta ?? ev.contentDelta);
+          const added = deltaLen > 0 ? deltaLen : prev ? Math.max(0, full - prev.length) : full;
+          const storedLength = Math.max(full, (prev?.length || 0) + Math.max(0, added));
+          partLen.set(partID, { length: storedLength, messageID });
+
           if (added > 0) {
-            const msg = part.messageID ? safeMessage(part.messageID) : null;
+            const msg = messageID ? safeMessage(messageID) : null;
             const tokens = tokensFromChars(added, ratioFor(msg));
-            if (part.messageID) {
-              timerFor(part.messageID).push(tokens, now); // precise active-gen time
-              currentMsgId = part.messageID;
+            if (messageID) {
+              timerFor(messageID).push(tokens, now);
+              currentMsgId = messageID;
             }
-            meter.push(tokens, now); // windowed rate for the sparkline
+            meter.push(tokens, now);
             bump();
           }
         } catch {
           /* ignore a single malformed event */
         }
       };
+
       const onMessage = (event: AnyRecord) => {
         try {
-          const info = event?.properties?.info;
-          if (info && String(info.sessionID) === String(props.sessionID) && isAssistant(info) && info.time?.completed) {
-            const generated = (Number(info.tokens?.output) || 0) + (Number(info.tokens?.reasoning) || 0);
+          const ev = event?.properties || {};
+          const info = messageInfo(ev.info ?? ev.message ?? ev) as AnyRecord;
+          const evSession = info?.sessionID ?? eventSessionID(ev, null);
+          if (!inViewSession(evSession)) return;
+
+          if (info && isAssistant(info) && info.id) {
+            observedMessages.set(info.id, info);
+          }
+          if (info && isAssistant(info) && info.time?.completed) {
+            const generated = generatedTokens(info.tokens);
             let chars = 0;
             try {
               const parts = props.api.state.part(info.id) || [];
               for (const p of parts) {
                 if ((p.type === "text" || p.type === "reasoning") && typeof p.text === "string") chars += p.text.length;
-                // The part is finalized — drop its live delta-tracking entry so
-                // partLen only ever holds the handful of currently-streaming parts.
                 partLen.delete(p.id);
               }
             } catch {
@@ -152,25 +240,23 @@ function TpsView(props: AnyRecord) {
               const key = modelKey(info);
               ratioByModel.set(key, calibrateRatio(ratioByModel.get(key), chars, generated));
             }
-            // Lock this message's timer to the exact generated count; the measured
-            // active time is unchanged, so its rate becomes exact.
             const t = timers.get(info.id);
             if (t && generated > 0) t.setTokens(generated);
-            if (currentMsgId === info.id) currentMsgId = null; // turn finished
+            if (currentMsgId === info.id) currentMsgId = null;
           }
         } catch {
           /* ignore */
         }
         bump();
       };
-      // Keep the per-message timers from accumulating orphans. A timer is needed for
-      // as long as its message is in the session (the view recomputes exact stats
-      // for all of them), so only drop it when the message is actually removed.
+
       const onMessageRemoved = (event: AnyRecord) => {
         try {
-          const messageID = event?.properties?.messageID;
+          const ev = event?.properties || {};
+          const messageID = ev.messageID ?? ev.message_id ?? ev.id ?? ev.message?.id;
           if (messageID) {
             timers.delete(messageID);
+            observedMessages.delete(messageID);
             if (currentMsgId === messageID) currentMsgId = null;
             for (const [partID, state] of partLen) {
               if (state.messageID === messageID) partLen.delete(partID);
@@ -181,21 +267,32 @@ function TpsView(props: AnyRecord) {
         }
         bump();
       };
+
       const onPartRemoved = (event: AnyRecord) => {
         try {
-          const partID = event?.properties?.partID;
+          const ev = event?.properties || {};
+          const partID = ev.partID ?? ev.part_id ?? ev.id ?? ev.part?.id;
           if (partID) partLen.delete(partID);
         } catch {
           /* ignore */
         }
       };
-      const subs = [
+
+      const onSessionSignal = () => bump();
+
+      const subs: Array<[string, (e: AnyRecord) => void]> = [
         ["message.part.updated", onPart],
+        ["message.part.delta", onPart],
+        ["session.next.text.delta", onPart],
+        ["session.next.reasoning.delta", onPart],
+        ["session.next.text.ended", onPart],
+        ["session.next.reasoning.ended", onPart],
         ["message.part.removed", onPartRemoved],
         ["message.updated", onMessage],
         ["message.removed", onMessageRemoved],
-        ["session.status", onMessage],
-        ["session.idle", onMessage],
+        ["session.status", onSessionSignal],
+        ["session.idle", onSessionSignal],
+        ["session.updated", onSessionSignal],
       ];
       for (const [ev, fn] of subs) {
         try {
@@ -207,18 +304,19 @@ function TpsView(props: AnyRecord) {
       }
     }
   } catch {
-    /* no event bus — the interval below still drives decay/idle reads */
+    /* no event bus */
   }
 
-  // ── Live tick: re-sample the windowed rate (sparkline + decay) and repaint ──
   timer = setInterval(() => {
     try {
+      pollSessionSummary();
       meter.sample(Date.now());
     } catch {
       /* ignore */
     }
     bump();
   }, cfg.pollMs);
+
   onCleanup(() => {
     for (const off of offs) {
       try {
@@ -231,45 +329,69 @@ function TpsView(props: AnyRecord) {
 
   function safeMessage(messageID: string) {
     try {
-      const messages = props.api.state.session.messages(props.sessionID) || [];
-      return messages.find((m: AnyRecord) => m?.id === messageID) || null;
+      const stateMessages = props.api.state.session.messages(viewSessionID()) || [];
+      const raw =
+        stateMessages.find((m: AnyRecord) => (messageInfo(m) as AnyRecord)?.id === messageID || m?.id === messageID) ||
+        observedMessages.get(messageID) ||
+        null;
+      return messageInfo(raw) || null;
     } catch {
-      return null;
+      return observedMessages.get(messageID) || null;
     }
   }
 
-  // ── Derived view model: exact stats from reactive state + the live snapshot ─
   const view = createMemo(() => {
-    tick(); // re-run on every live tick / event
+    tick();
     const now = Date.now();
-    let messages = [];
+    let messages: AnyRecord[] = [];
     try {
-      messages = props.api.state.session.messages(props.sessionID) || [];
+      messages = props.api.state.session.messages(viewSessionID()) || [];
     } catch {
       messages = [];
     }
-    const stats = [];
-    let last = null;
-    let inflightId = null;
-    for (const m of messages) {
+    if (observedMessages.size) {
+      const merged = new Map<string, AnyRecord>();
+      for (const raw of messages) {
+        const info = messageInfo(raw) as AnyRecord;
+        if (info?.id) merged.set(info.id, raw);
+      }
+      for (const [mid, info] of observedMessages) merged.set(mid, info);
+      messages = [...merged.values()];
+    }
+    const stats: AnyRecord[] = [];
+    let last: AnyRecord | null = null;
+    let inflightId: string | null = null;
+    for (const raw of messages) {
+      const m = messageInfo(raw) as AnyRecord;
       if (!isAssistant(m)) continue;
       const s = messageStats(m, timingFor(m.id)) as AnyRecord | null;
       if (!s) continue;
       stats.push(s);
-      if (s.done) last = s; // most-recent completed message
-      else inflightId = m.id; // assistant message still streaming
+      if (s.done) last = s;
+      else inflightId = m.id;
+    }
+    if (stats.length === 0) {
+      const summary = messageStats(summaryMessage(currentSession(), viewSessionID()), undefined) as AnyRecord | null;
+      if (summary) {
+        stats.push(summary);
+        last = summary;
+      }
     }
     const session = aggregate(stats);
-    let status;
+    let status: string | undefined;
     try {
-      status = props.api.state.session.status(props.sessionID)?.type;
+      status = props.api.state.session.status(viewSessionID())?.type;
     } catch {
       status = undefined;
     }
-    // The live headline is the in-flight message's active-generation rate.
-    const inflight = (inflightId && timers.get(inflightId)) || (currentMsgId && timers.get(currentMsgId)) || null;
+    const inflight =
+      (inflightId && timers.get(inflightId)) ||
+      (summaryLiveId && timers.get(summaryLiveId)) ||
+      (currentMsgId && timers.get(currentMsgId)) ||
+      null;
+    const windowTps = meter.rate(now);
     const live = {
-      tps: inflight ? inflight.tps() : null,
+      tps: windowTps > 0 ? windowTps : inflight ? inflight.tps() : null,
       active: meter.active(now),
       series: meter.series(),
       peak: meter.peak,
@@ -335,13 +457,14 @@ const tui = async (api: AnyRecord, options: AnyRecord) => {
   try {
     const cfg = resolveConfig(options, typeof process !== "undefined" ? process.env : {}) as AnyRecord;
     if (!cfg.enabled) return;
-    if (!api?.slots?.register) return; // runtime without the slot API → no-op
+    if (!api?.slots?.register) return;
     api.slots.register({
       order: cfg.order,
       slots: {
-        [cfg.slot](_ctx: AnyRecord, props: AnyRecord) {
-          if (!props?.session_id) return undefined;
-          return <TpsView api={api} sessionID={props.session_id} cfg={cfg} />;
+        [cfg.slot](ctx: AnyRecord, slotProps?: AnyRecord) {
+          const sessionID = resolveSessionID(ctx, slotProps, api);
+          if (!sessionID) return undefined;
+          return <TpsView api={api} sessionID={sessionID} cfg={cfg} />;
         },
       },
     });

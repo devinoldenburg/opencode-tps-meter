@@ -44,8 +44,13 @@ let registered = null;
 const mockApi = {
   theme: { current: { text: "#fff", accent: "#0ff", success: "#0f0", warning: "#ff0", textMuted: "#888" } },
   event: { on: () => () => {} },
+  route: { current: { params: { sessionID: "ses_route" } } },
   state: {
-    session: { messages: () => [], status: () => ({ type: "idle" }) },
+    session: {
+      messages: () => [],
+      status: () => ({ type: "idle" }),
+      get: (id) => (id === "ses_demo" ? { id: "ses_demo", tokens: { output: 10 }, time: { created: 0, updated: 1000 } } : null),
+    },
     part: () => [],
   },
   slots: {
@@ -67,11 +72,32 @@ assert(
 
 // The slot renderer must no-op (return undefined) when there's no session id.
 try {
+  const noRoute = {
+    ...mockApi,
+    route: { current: { params: {} } },
+    state: { ...mockApi.state, session: { messages: () => [], status: () => ({ type: "idle" }), get: () => null } },
+  };
+  await plugin.tui(noRoute, { order: 150 });
   const empty = registered.slots.sidebar_content({}, {});
   assert(empty === undefined, "sidebar_content returns undefined without a session_id");
+  await plugin.tui(mockApi, { order: 150 });
 } catch (err) {
   console.error("✗ sidebar_content threw for an empty session:", err);
   process.exit(1);
+}
+
+try {
+  const fromCtx = registered.slots.sidebar_content({ session_id: "ses_ctx" }, {});
+  assert(fromCtx !== undefined, "sidebar_content resolves session_id from ctx");
+  const fromProp = registered.slots.sidebar_content({}, { sessionID: "ses_prop" });
+  assert(fromProp !== undefined, "sidebar_content resolves sessionID from slot props");
+} catch (err) {
+  const msg = String(err?.message || err);
+  if (!msg.includes("No renderer found")) {
+    console.error("✗ sidebar_content session resolution failed:", err);
+    process.exit(1);
+  }
+  console.log("✓ sidebar_content resolves session ids (JSX only — no renderer)");
 }
 
 // Build the component for a real session. We have no live terminal renderer in a

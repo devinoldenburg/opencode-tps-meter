@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-06-27
+
+### Fixed
+
+- **Session handling (TUI).** Sidebar slot renderers now resolve the active session from
+  `ctx.session_id`, `sessionID` / `sessionId` on ctx or slot props, `route.params`, and
+  `session.current()` / `session.active()` — fixing meters that never mounted when OpenCode
+  passed only `sessionID` or routed session ids.
+- **Event coverage.** Subscribes to `message.part.delta`, `session.next.text.delta`,
+  `session.next.reasoning.delta`, and related `session.next.*` events; normalizes
+  `messageID`, `partID`, and delta payload shapes so live TPS is not dropped on newer builds.
+- **Session summary fallback.** When `session.messages()` is empty, aggregates from
+  `session.get()` token totals and polls token growth for live throughput (TUI runtimes
+  without per-message arrays).
+- **Observed messages cache.** `message.updated` assistant payloads are merged into the
+  view model so history survives partial state APIs.
+
+### Added
+
+- **`plugins/tps/session.js`** — pure session-id and event-payload helpers (unit-tested).
+- **Plugin verify** — asserts session id resolution from ctx, props, and route fallback.
+
 ## [0.1.5] — 2026-06-27
 
 ### Changed
