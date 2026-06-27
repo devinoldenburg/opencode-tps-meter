@@ -6,6 +6,26 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this projec
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-06-27
+
+### Fixed
+
+- **CI / TypeScript.** `parsePartDelta` JSDoc and return types aligned with implementation;
+  inflight peak typing in `tps-meter.tsx` so `npx tsc --noEmit` passes on all matrix jobs.
+
+### Changed
+
+- **Documentation.** README, ARCHITECTURE, VERSIONING, and changelog compare links brought current
+  (92 tests, `session.js` / `adapter.js`, headline vs sparkline, CI steps).
+- **Release workflow.** Runs TypeScript check before publish; GitHub Release title is tag only
+  (`vX.Y.Z`).
+- **Sidebar idle state.** Empty session shows **TPS** + `waiting for tokens` instead of hiding
+  the section.
+
+### Added
+
+- **`npm run typecheck`** and `validate` includes typecheck.
+
 ## [0.1.7] — 2026-06-27
 
 ### Fixed
@@ -205,13 +225,19 @@ Initial release.
   gap threshold, detail level, sparkline, and labels, via plugin options or environment variables.
 - **Installer** (`scripts/install.mjs`, the package bin) — idempotent, reversible, with
   `--local` / `--dir` / `--no-install` / `--dry-run` / `--uninstall` / `--print` / `--help` modes.
-- **Pure, framework-free core** (`plugins/tps/*.js`) with **62 unit + integration tests**
-  asserting hand-computed exact expectations.
+- **Pure, framework-free core** (`plugins/tps/*.js`) with unit + integration tests asserting
+  hand-computed exact expectations.
 - **Tooling**: a runnable terminal demo (`tools/demo.mjs`, with a tool-call gap and a
   deterministic `--ci` mode), a Bun-based plugin verifier (`tools/verify-plugin.mjs`), and a peer
   installer (`tools/install-peers.mjs`).
 
-[Unreleased]: https://github.com/devinoldenburg/opencode-tps-meter/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/devinoldenburg/opencode-tps-meter/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.8
+[0.1.7]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.7
+[0.1.6]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.6
+[0.1.5]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.5
+[0.1.4]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.4
+[0.1.3]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.3
 [0.1.2]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.2
 [0.1.1]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.1
 [0.1.0]: https://github.com/devinoldenburg/opencode-tps-meter/releases/tag/v0.1.0

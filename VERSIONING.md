@@ -32,9 +32,10 @@ unchanged — only the npm package name is scoped. The package is published with
 
 ## Release process
 
-Releases are cut by pushing a git tag of the form `v<version>` (e.g. `v0.1.0`). The
-[`Release` workflow](./.github/workflows/release.yml) runs the full test suite, then publishes
-the package to the npm registry and creates a GitHub Release with generated notes.
+Releases are cut by pushing a git tag of the form `v<version>` (e.g. `v0.1.8`). The
+[`Release` workflow](./.github/workflows/release.yml) runs unit tests, TypeScript check
+(`tsc --noEmit`), plugin verification (Bun), demo smoke (`--ci`), and pack check, then
+publishes to npm and creates a GitHub Release (title = tag name only).
 
 ### One-time setup (maintainer)
 

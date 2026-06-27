@@ -145,13 +145,18 @@ End-to-end wall-clock rate is intentionally not used for the headline; it confla
 ## Development
 
 ```bash
-npm test
-npm run verify:plugin
+npm run validate      # test + typecheck + pack:check
+npm run verify:plugin # Bun + @opentui/solid (after npm ci)
 npm run demo
 node tools/demo.mjs --ci
 ```
 
-Core logic is framework-free ESM under `plugins/tps/`. The TUI entry point is `plugins/tps-meter.tsx`. Peer dependencies (`@opentui/solid`, `solid-js`, `@opencode-ai/plugin`) are supplied by the OpenCode runtime when the plugin loads.
+Core logic is framework-free ESM under `plugins/tps/` (including `session.js` and `adapter.js`).
+The TUI entry is `plugins/tps-meter.tsx`. **92** unit and integration tests. Peer dependencies
+are supplied by the OpenCode runtime at load time.
+
+Continuous integration: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) (multi-OS /
+multi-Node matrix).
 
 ## Documentation
 
