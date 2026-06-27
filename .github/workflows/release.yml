@@ -54,6 +54,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
       - name: Verify plugin runtime
         run: npm run verify:plugin
 

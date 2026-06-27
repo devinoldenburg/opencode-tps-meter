@@ -62,7 +62,10 @@ export function summaryMessage(current?: object | null, fallbackSessionID?: stri
 export function eventBelongsToView(viewSessionID: string, evSession: unknown, opts?: object): boolean;
 export function removalSessionID(evProps: object): unknown;
 export function removalMessageID(evProps: object): unknown;
-export function parsePartDelta(viewSessionID: string, event: object): object;
+export function parsePartDelta(
+  viewSessionID: string,
+  event: object,
+): { ok: false } | { ok: true; messageID: string; partID: string; partType?: string; full: number; deltaLen: number };
 export function partCharsAdded(full: number, deltaLen: number, prev?: { length: number }): number;
 export function liveHeadlineTps(inflight: { tps: () => number | null } | null, meter: object, now: number): number | null;
 declare const plugin: { id: string; tui: (...args: unknown[]) => Promise<unknown> };

@@ -7,14 +7,14 @@ import { deltaTextLength, eventSessionID, eventBelongsToView } from "./session.j
 /**
  * @param {string} viewSessionID
  * @param {Record<string, unknown>} event
- * @returns {{ ok: boolean, added: number, messageID?: string, partID?: string, partType?: string }}
+ * @returns {{ ok: false } | { ok: true, messageID: string, partID: string, partType: string|undefined, full: number, deltaLen: number }}
  */
 export function parsePartDelta(viewSessionID, event) {
   const ev = event?.properties && typeof event.properties === "object" ? event.properties : {};
   const part = ev.part && typeof ev.part === "object" ? ev.part : {};
   const evSession = eventSessionID(ev, part);
   if (!eventBelongsToView(viewSessionID, evSession)) {
-    return { ok: false, added: 0 };
+    return { ok: false };
   }
 
   const eventType = event?.type || "";
@@ -24,7 +24,7 @@ export function parsePartDelta(viewSessionID, event) {
     ev.partType ??
     (String(eventType).includes(".reasoning.") ? "reasoning" : String(eventType).includes(".text.") ? "text" : undefined);
   if (partType && partType !== "text" && partType !== "reasoning") {
-    return { ok: false, added: 0 };
+    return { ok: false };
   }
 
   const messageID =

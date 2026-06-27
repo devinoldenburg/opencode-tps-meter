@@ -28,13 +28,19 @@ export function buildView(input = {}) {
   const last = input.last || null;
   const session = input.session || null;
   const status = input.status;
+  const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
+  const compact = cfg.detail === "compact";
 
   const streaming =
     status === "busy" ? true : status === "idle" || status === "retry" ? false : !!(live && live.active);
   const hasHistory = !!last || (session && session.count > 0);
 
   if (!streaming && !hasHistory) {
-    return { state: "none", lines: [] };
+    const lines = [{ key: "title", segments: [{ text: headerLabel, tone: "header" }] }];
+    if (cfg.detail !== "minimal") {
+      lines.push({ key: "waiting", segments: [{ text: "waiting for tokens", tone: "muted" }] });
+    }
+    return { state: "idle", lines };
   }
 
   const metricKey = cfg.metric === "output" ? "outputTps" : "generatedTps";
@@ -43,9 +49,6 @@ export function buildView(input = {}) {
 
   const lines = [];
   const push = (key, segments) => lines.push({ key, segments: segments.filter((s) => s && s.text != null && s.text !== "") });
-
-  const headerLabel = cfg.icon ? `${cfg.icon} ${cfg.label}` : cfg.label;
-  const compact = cfg.detail === "compact";
 
   if (compact) {
     push("title", [{ text: headerLabel, tone: "header" }]);

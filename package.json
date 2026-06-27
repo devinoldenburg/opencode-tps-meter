@@ -35,7 +35,8 @@
     "peers": "node tools/install-peers.mjs",
     "verify:plugin": "node tools/install-peers.mjs && bun tools/verify-plugin.mjs",
     "pack:check": "npm pack --dry-run",
-    "validate": "npm test && npm run pack:check"
+    "typecheck": "tsc --noEmit",
+    "validate": "npm test && npm run typecheck && npm run pack:check"
   },
   "keywords": [
     "opencode",

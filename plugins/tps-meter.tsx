@@ -377,19 +377,21 @@ function TpsView(props: AnyRecord) {
     } catch {
       status = undefined;
     }
-    const inflight =
-      (inflightId && timers.get(inflightId)) ||
-      (summaryLiveId && timers.get(summaryLiveId)) ||
-      (currentMsgId && timers.get(currentMsgId)) ||
+    const inflightTimer: GenerationTimer | null =
+      (inflightId ? timers.get(inflightId) : undefined) ??
+      (summaryLiveId ? timers.get(summaryLiveId) : undefined) ??
+      (currentMsgId ? timers.get(currentMsgId) : undefined) ??
       null;
-    const streamingActive = meter.active(now) || (inflight !== null && (inflight.tps() ?? 0) > 0);
+    const inflightRate = inflightTimer?.tps();
+    const inflightPeak = inflightRate != null && Number.isFinite(inflightRate) ? inflightRate : 0;
+    const streamingActive = meter.active(now) || inflightPeak > 0;
     const live = {
-      tps: liveHeadlineTps(inflight, meter, now),
+      tps: liveHeadlineTps(inflightTimer, meter, now),
       active: streamingActive,
       series: meter.series(),
-      peak: Math.max(meter.peak, inflight ? inflight.tps() ?? 0 : 0),
-      gaps: inflight ? inflight.gaps : 0,
-      idleMs: inflight ? inflight.idleMs : 0,
+      peak: Math.max(meter.peak ?? 0, inflightPeak),
+      gaps: inflightTimer ? inflightTimer.gaps : 0,
+      idleMs: inflightTimer ? inflightTimer.idleMs : 0,
     };
     return buildView({
       live,
@@ -413,19 +415,14 @@ function TpsView(props: AnyRecord) {
     });
   });
 
-  const lineStyle = (key: string) => {
-    if (key === "title" || key === "header") return { fg: toneColor("header") };
-    if (key === "rate") return { fg: toneColor("value") };
-    if (key === "spark") return { fg: toneColor("spark") };
-    return undefined;
-  };
+  const renderedLines = () => view().lines;
 
   return (
     <Show when={view().state !== "none"}>
-      <box flexDirection="column" gap={0}>
-        <For each={view().lines}>
-          {(line) => (
-            <text style={lineStyle(line.key)}>
+      <text>
+        <For each={renderedLines()}>
+          {(line, lineIndex) => (
+            <>
               <For each={line.segments}>
                 {(seg) =>
                   seg.tone === "header" ? (
@@ -437,10 +434,13 @@ function TpsView(props: AnyRecord) {
                   )
                 }
               </For>
-            </text>
+              <Show when={lineIndex() < renderedLines().length - 1}>
+                <span>{"\n"}</span>
+              </Show>
+            </>
           )}
         </For>
-      </box>
+      </text>
     </Show>
   );
 }

@@ -13,11 +13,16 @@ const LAST_MSG = {
   tokens: { input: 1000, output: 312, reasoning: 0, cache: { read: 0, write: 0 } },
 };
 
-test("no activity renders nothing", () => {
+test("no activity keeps the section visible with a waiting placeholder", () => {
   const v = buildView({ live: null, last: null, session: null, status: "idle" });
-  assert.equal(v.state, "none");
-  assert.deepEqual(v.lines, []);
-  assert.equal(renderText(v), "");
+  assert.equal(v.state, "idle");
+  assert.equal(renderText(v), ["TPS", "waiting for tokens"].join("\n"));
+});
+
+test("minimal detail keeps only the TPS label before any tokens arrive", () => {
+  const v = buildView({ live: null, last: null, session: null, status: "idle", config: { detail: "minimal" } });
+  assert.equal(v.state, "idle");
+  assert.equal(renderText(v), "TPS");
 });
 
 test("idle-with-history projects throughput + timing only (no native-dup stats)", () => {
